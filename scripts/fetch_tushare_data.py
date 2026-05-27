@@ -785,6 +785,14 @@ def cmd_realtime_quote(args, fetcher):
             # 实时行情只打印，不保存（时效性太强）
             print("(实时行情不保存到数据库)")
 
+def cmd_realtime_tick(args, fetcher):
+    """实时分笔成交"""
+    df = fetcher.get_realtime_tick(args.ts_code)
+    if df is not None:
+        print(df)
+        if args.save_db:
+            print("(实时分笔不保存到数据库)")
+
 def cmd_pro_bar(args, fetcher):
     """pro_bar 行情"""
     df = fetcher.get_pro_bar(args.ts_code, args.start, args.end, args.adj)

@@ -225,8 +225,8 @@ python scripts/fetch_tushare_data.py index_daily 000001.SH --start 20260101 --en
 # 仅查看不保存
 python scripts/fetch_tushare_data.py daily 000001.SZ --no-save
 
-# 抓取所有主要数据
-python scripts/fetch_tushare_data.py all --save-db
+# 抓取所有主要数据（默认保存到数据库）
+python scripts/fetch_tushare_data.py all
 ```
 
 ### 数据库表结构
