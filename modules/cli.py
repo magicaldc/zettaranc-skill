@@ -116,39 +116,39 @@ def cmd_screen(args):
 
 def cmd_watchlist(args):
     """自选股管理"""
-    from modules.watchlist import Watchlist
+    from modules.watchlist import add_watch, remove_watch, list_watch, scan_watchlist
 
-    wl = Watchlist()
     action = args.action
 
     if action == 'add':
-        wl.add(args.ts_code, tags=args.tags.split(',') if args.tags else None)
+        tags = args.tags if hasattr(args, 'tags') and args.tags else ""
+        add_watch(args.ts_code, tags=tags)
         print(f"已添加: {args.ts_code}")
 
     elif action == 'remove':
-        wl.remove(args.ts_code)
+        remove_watch(args.ts_code)
         print(f"已移除: {args.ts_code}")
 
     elif action == 'list':
-        stocks = wl.list_all()
+        stocks = list_watch()
         print(f"\n自选股列表 ({len(stocks)}只):")
         for s in stocks:
-            tags = ','.join(s.get('tags', [])) or '无'
-            print(f"  {s['ts_code']}  标签:{tags}  添加:{s['added_date']}")
+            tags = s.get('tags', '') or '无'
+            added = s.get('added_date', s.get('updated_at', '未知'))
+            print(f"  {s['ts_code']}  标签:{tags}  添加:{added}")
 
     elif action == 'scan':
-        from modules.strategies import detect_all_strategies
-        stocks = wl.list_all()
+        result = scan_watchlist()
+        stocks = result.get('stocks', [])
         print(f"\n扫描自选股 ({len(stocks)}只)...")
         for s in stocks:
             ts_code = s['ts_code']
-            try:
-                signals = detect_all_strategies(ts_code, days=60)
-                if signals:
-                    latest = signals[0]
-                    print(f"  {ts_code}: {latest.strategy.value} ({latest.trade_date})")
-            except Exception:
-                pass
+            signals = s.get('signals', [])
+            if signals:
+                latest = signals[0]
+                print(f"  {ts_code}: {latest['strategy']} ({latest['date']})")
+            else:
+                print(f"  {ts_code}: 无信号")
 
 
 def cmd_diagnose(args):
