@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.ai/code)
-[![v2.7.0](https://img.shields.io/badge/version-2.7.0-red)](CHANGELOG.md)
+[![v2.8.0](https://img.shields.io/badge/version-2.8.0-red)](CHANGELOG.md)
 
 <br>
 
@@ -19,9 +19,9 @@
 
 ---
 
-## v2.7.0 能做什么
+## v2.8.0 能做什么
 
-> **不是聊天机器人，是跑在真实数据上的交易分析引擎。**
+> **不只是炒股工具，是多场景智能决策系统。**
 
 ### 数据规模
 
@@ -34,16 +34,25 @@
 | financial_data | 2,733 | 财报数据（含 PE/PB/PS） |
 | tushare_indicator_cache | 12,554 | Tushare 官方指标（diff 验证用） |
 
-### 四大核心能力
+### 五大核心能力
 
 | 能力 | 说明 | 示例 |
 |------|------|------|
+| **🎯 意图识别** | 自动识别 stock/career/life/chat 四种意图，路由到对应角色框架 | `python -m modules.intent_chat "B1 买点怎么判断"` |
 | **📊 股票分析** | 60+ 技术指标实时计算，战法自动识别 | `python -m modules.cli analyze 600487.SH` |
 | **📈 策略回测** | 单策略 / 多策略组合回测，资金曲线 + 夏普比率 | `from modules.backtest import backtest_multi_strategy` |
 | **🔍 智能选股** | 曼城评分体系全市场扫描，B1/B2/B3 信号自动筛选 | `python -m modules.cli screen --strategy B1 --limit 20` |
 | **👁️ 观察池管理** | 自选股批量监控，每日信号扫描 + 报告生成 | `python -m modules.cli watchlist scan` |
 
 ### 完整功能清单
+
+**意图识别（v2.8.0 新增）**
+- ✅ 四意图自动路由：stock / career / life / chat
+- ✅ 规则匹配引擎（keywords + patterns，零 token 消耗）
+- ✅ 向量知识库检索适配器（Qdrant，按意图分类过滤，默认关闭）
+- ✅ LLM 生成层（MiniMax / OpenAI 兼容格式，可选）
+- ✅ Z哥职业决策框架（rules/career_prompt.md）
+- ✅ Z哥人生决策框架（rules/life_prompt.md）
 
 **数据层**
 - ✅ Tushare 真实行情接入（日线 OHLCV、资金流向、财报、财务指标）
@@ -103,14 +112,20 @@ cp .env.example .env
 
 ```ini
 DATA_MODE=jnb
-TUSHARE_TOKEN=你的56位token
-TUSHARE_API_URL=https://tt.xiaodefa.cn
-DB_PATH=data/stock_data.db
-```
+TUSHARE_TOKEN=你...n
+> **数据模式**：`DATA_MODE=jnb` 时必须配置 Tushare Token 和 API URL；`DATA_MODE=websearch` 时可留空。
+> 
+> **Token 获取**：前往 [Tushare 官网](https://tushare.pro/user/token) 注册。
+> 
+> **中转 API**：需要配置中转地址，可从 Tushare 中转服务商获取。
+> 
+> **LLM 配置**：可选，配置 `LLM_API_KEY` 后可使用 LLM 生成回答；未配置时仅显示意图识别结果。
+> 
+> **向量知识库**：默认关闭，设置 `KB_ENABLED=true` 并配置 `KB_API_URL` 可开启 RAG 检索。
 
 > **Token 获取**：前往 [Tushare 官网](https://tushare.pro/user/token) 注册。
 > 
-> **中转 API**：`https://tt.xiaodefa.cn`，无需高级积分，支持限流 120 次/分钟。
+> **中转 API**：需要配置中转地址，可从 Tushare 中转服务商获取。
 
 ### 3. 初始化
 
@@ -315,8 +330,14 @@ zettaranc-skill/
 ├── CHANGELOG.md                # 版本变更日志
 ├── AGENTS.md                   # AI Agent 开发指南
 ├── docs/
-│   └── USER_GUIDE.md           # 详细使用手册与操作手册
+│   ├── USER_GUIDE.md           # 详细使用手册与操作手册
+│   ├── CONFIG_GUIDE.md         # 配置指南（v2.8.0 新增）
+│   └── CHANGELOG.md            # 版本变更日志
 ├── .env / .env.example         # 本地配置
+├── rules/                      # 意图识别规则与角色框架（v2.8.0 新增）
+│   ├── intent_rules.yaml       # 意图匹配规则（keywords + patterns）
+│   ├── career_prompt.md        # Z哥职业决策框架
+│   └── life_prompt.md          # Z哥人生决策框架
 ├── data/
 │   └── stock_data.db           # SQLite 数据库（8张表）
 ├── modules/                    # Python 数据层（~6800 行）
@@ -336,13 +357,17 @@ zettaranc-skill/
 │   ├── portfolio_diagnosis.py  # 持股检查端到端
 │   ├── watchlist.py            # 自选股观察池
 │   ├── cli.py                  # 命令行工具入口
+│   ├── intent_router.py        # 意图识别与路由（v2.8.0 新增）
+│   ├── knowledge_retriever.py  # 向量知识库检索适配器（v2.8.0 新增）
+│   ├── intent_chat.py          # 意图聊天界面（v2.8.0 新增）
+│   ├── llm_providers.py        # LLM 提供商（v2.8.0 新增）
 │   ├── trade_parser.py         # 口语化输入解析
 │   ├── trade_manager.py        # 交易记录 CRUD
 │   ├── trade_reviewer.py       # 交割单数据准备层（给 LLM 用）
 │   ├── setup_wizard.py         # 初始化配置向导
 │   └── zettaranc_voice.py      # 语料库 / LLM 提示词模板
 ├── knowledge/                  # 知识文档（14篇交易体系）
-├── tests/                      # 单元测试（pytest，261 用例）
+├── tests/                      # 单元测试（pytest，264 用例）
 └── scripts/                    # 工具脚本
 ```
 
@@ -364,6 +389,16 @@ zettaranc-skill/
 **Python 层只做数据准备，所有点评由 LLM 用 Z哥角色生成。**
 
 ```
+用户输入 → 意图识别 → 规则匹配 → 角色框架（SKILL.md / career / life）
+                                ↓
+                    知识库检索（可选，Qdrant RAG）
+                                ↓
+                    系统提示组装
+                                ↓
+                    LLM 生成（可选，MiniMax / OpenAI 兼容）
+                                ↓
+                              回复
+
 Tushare API → data_sync → SQLite → indicators/ → strategies/ → backtest/
                                                         ↓
                                               SKILL.md (LLM 角色层)

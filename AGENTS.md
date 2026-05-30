@@ -62,10 +62,12 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
 | 层级 | 技术 |
 |------|------|
 | 数据管道 | Python 3.14（标准库 + `sqlite3`、`pathlib`、`dataclasses`、`enum`） |
-| 外部数据 | `tushare`（Pro API，支持中转 URL `https://tt.xiaodefa.cn`）、`pandas`、`requests` |
+| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas`、`requests` |
 | 环境配置 | `python-dotenv`（`.env` 文件） |
 | 数据库 | SQLite（本地文件，8 张表，26 万+ 条真实数据） |
-| 测试框架 | `pytest`（261 用例） |
+```ini
+DATA_MODE=jnb
+TUSHARE_TOKEN=你...n | 测试框架 | `pytest`（264 用例） |
 | 视频下载 | `yt-dlp`（语料采集） |
 | 语音转写 | `faster-whisper`（语料采集） |
 | 文档格式 | Markdown（全部文档与语料） |
@@ -87,7 +89,7 @@ python-dotenv>=1.0.0
 ```ini
 DATA_MODE=jnb
 TUSHARE_TOKEN=你的56位token
-TUSHARE_API_URL=https://tt.xiaodefa.cn
+TUSHARE_API_URL=需要配置中转地址
 TUSHARE_VERIFY_TOKEN_URL=
 DATA_DIR=data
 DB_PATH=data/stock_data.db
