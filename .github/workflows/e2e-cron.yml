@@ -14,13 +14,14 @@ on:
         description: "股票代码（默认 600519.SH）"
         required: false
         default: "600519.SH"
+        type: string
 
 jobs:
   realdata-weekly:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: ${{ secrets.TUSHARE_TOKEN != '' && secrets.TUSHARE_API_URL != '' }}
-    # 观察期：失败不阻塞（v2.11.0 再决定要不要严格）
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4

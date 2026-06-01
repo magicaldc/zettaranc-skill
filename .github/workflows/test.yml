@@ -68,13 +68,11 @@ jobs:
 
       - name: Run SKILL.md quality gate
         run: |
+          pip install -e . > /dev/null
           python corpus/quality_check.py --json > quality-report.json
           echo "=== quality-report.json ==="
           cat quality-report.json
-          echo
           echo "=== summary ==="
-          python -c "import json; d=json.load(open('quality-report.json')); print(f\"passed={d['passed']}/{d['total']} all_passed={d['all_passed']}\")"
-          # 显式跑 --strict 触发 exit code 反映违规
           python corpus/quality_check.py --strict || true
 
   e2e-realdata:
