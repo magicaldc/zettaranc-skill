@@ -5,7 +5,6 @@
 核心：建仓波 → 拉升波 → 冲刺波
 """
 
-from typing import Optional
 
 from .core import DailyData
 

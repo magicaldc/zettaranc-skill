@@ -1,5 +1,4 @@
-from typing import Optional
-from .core import StrategyType, StrategySignal, Priority, Action, _klines_dict_to_daily
+from .core import StrategyType, StrategySignal, Priority, _klines_dict_to_daily
 from ..indicators import detect_four_brick_system
 
 

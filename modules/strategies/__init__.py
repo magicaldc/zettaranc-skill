@@ -1,5 +1,4 @@
-from typing import Any, Optional
-import sys
+from typing import Any
 
 from .core import (
     StrategyType,
@@ -7,8 +6,8 @@ from .core import (
     Action,
     StrategySignal,
     get_kline_data,
-    get_db_connection,
-    _klines_dict_to_daily,
+    get_db_connection,  # noqa: F401  re-export
+    _klines_dict_to_daily,  # noqa: F401  re-export
     _dict_to_daily,
     _calc_kdj,
     _calc_bbi,
@@ -25,7 +24,7 @@ from .compound_strategies import (
     detect_duichen_va,
 )
 from .sell_signals import detect_s1, detect_s2, detect_s3, detect_brick_signals, _calc_dif
-from .kirin import analyze_kirin_phase
+from .kirin import analyze_kirin_phase  # noqa: F401  re-export
 
 
 # Backward compatibility functions

@@ -2,19 +2,16 @@
 技术指标数据层模块
 """
 
-import os
-import sqlite3
-from typing import Any, Optional
 
 try:
     from .core import (
-        DB_PATH,
+        DB_PATH,  # noqa: F401  可能被外部引用
         get_db_connection,
         DailyData,
         TradeSignal,
         IndicatorResult,
         calculate_ma,
-        calculate_ema,
+        calculate_ema,  # noqa: F401  可能被外部引用
         calculate_kdj,
         calculate_bbi,
         calculate_rsi_multi,
@@ -22,7 +19,7 @@ try:
         calculate_bollinger,
         calculate_vol_ratio,
         calculate_macd,
-        get_data_mode,
+        get_data_mode,  # noqa: F401  可能被外部引用
     )
     from .price_patterns import (
         calculate_zg_white,

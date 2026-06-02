@@ -2,23 +2,15 @@
 价格模式识别模块
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from .core import (
     DailyData,
-    TradeSignal,
-    IndicatorResult,
     calculate_ma,
     calculate_ema,
-    calculate_sma_td,
     calculate_sma_series,
     calculate_slope,
     calculate_kdj,
-    calculate_bbi,
-    calculate_rsi_multi,
-    calculate_wr_multi,
-    calculate_bollinger,
-    calculate_vol_ratio,
 )
 
 

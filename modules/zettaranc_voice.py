@@ -3,7 +3,6 @@ Z哥 风格语料库 V3.0
 为 LLM 提供 Z哥风格的参考语料，点评由 LLM 生成，此模块只做数据格式化
 """
 
-from typing import Any
 import random
 
 

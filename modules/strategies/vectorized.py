@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Optional
-from .core import StrategyType, StrategySignal, Priority, Action
+from .core import StrategyType, StrategySignal, Priority
 
 
 def detect_b1_vec(df: pd.DataFrame) -> pd.Series:

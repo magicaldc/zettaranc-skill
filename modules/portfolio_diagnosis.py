@@ -10,14 +10,13 @@
 5. 止损/止盈位提示
 """
 
-import os
-from typing import Any, Optional
+from typing import Any
 from dataclasses import dataclass, field
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 
 from .indicators import analyze_stock, get_kline_data, calculate_sell_score, IndicatorResult, DailyData
-from .strategies import detect_all_strategies, analyze_kirin_phase, StrategyType, StrategySignal
+from .strategies import detect_all_strategies, analyze_kirin_phase, StrategyType
 
 
 @dataclass

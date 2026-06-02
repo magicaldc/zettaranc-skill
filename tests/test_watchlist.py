@@ -2,13 +2,11 @@
 watchlist.py 自选股观察池测试
 """
 
-import pytest
 from modules.watchlist import (
     add_watch,
     remove_watch,
     list_watch,
     scan_watchlist,
-    WatchAlert,
 )
 
 

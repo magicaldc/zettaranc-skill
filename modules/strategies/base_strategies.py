@@ -1,5 +1,4 @@
-from typing import Optional
-from .core import StrategyType, StrategySignal, Priority, Action, _calc_kdj, _calc_bbi
+from .core import StrategyType, StrategySignal, Priority, Action, _calc_kdj
 
 
 def _safe_num(val, default=0):

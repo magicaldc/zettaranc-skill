@@ -5,8 +5,6 @@ strategies.py 战法识别测试
 import pytest
 from modules.strategies import (
     StrategyType,
-    StrategySignal,
-    get_kline_data,
     calculate_ma,
     calculate_kdj,
     calculate_bbi,
@@ -393,7 +391,6 @@ class TestDetectB2Positive:
 class TestDetectS2Positive:
     def test_macd_divergence(self):
         """价格创新高但DIF未创新高 → S2顶背离"""
-        from datetime import datetime, timedelta
 
         # 构造30天数据：前25天快速上涨，后5天缓慢上涨
         klines = generate_uptrend_klines(n=30, start_price=100.0, daily_pct=0.8)

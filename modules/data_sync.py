@@ -12,8 +12,7 @@ import collections
 import multiprocessing
 import concurrent.futures
 from datetime import datetime, timedelta
-from typing import Optional, Any
-from pathlib import Path
+from typing import Any
 
 try:
     import tushare as ts
@@ -23,9 +22,16 @@ except ImportError:
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载，override=True）
 
 from .database import get_connection, get_db_path
-from .tushare_client import TushareClient
 
 logger = logging.getLogger(__name__)
+
+# 并发同步线程数（4 个 sync_* 方法共用）
+_MAX_SYNC_WORKERS = 5
+
+# 涨跌停阈值（主板 10%，此处用 9.9% 容差）
+# 注意：创业板(300xxx)/科创板(688xxx) 实际为 20%，ST 为 5%，
+# 新股前 5 日无限制。当前简化处理，v2.11.0 计划按 market 字段动态调整。
+_LIMIT_THRESHOLD = 9.9
 
 # 中转 API 配置（从环境变量读取）
 TUSHARE_API_URL = os.environ.get("TUSHARE_API_URL", "")
@@ -114,9 +120,7 @@ class DataSyncer:
 
         # 向后兼容：保留 instance-level attrs（外部可能引用）
         # 但实际限流走模块级 _GLOBAL_LIMITER
-        self.min_interval = 60 / 120
-        self.last_request_time: dict[str, float] = {}
-        self._rate_limit_lock = threading.Lock()
+        # （v2.11.0 计划移除，改用 @property + DeprecationWarning）
 
     def _rate_limit(self, api_name: str):
         """线程安全的限流控制（v2.10.0 P1-4 改为调模块级 _GLOBAL_LIMITER）"""
@@ -237,8 +241,8 @@ class DataSyncer:
 
             # 计算量比（需要历史数据，这里先跳过，由指标计算模块处理）
             # 计算涨跌停标记
-            df["is_limit_up"] = df["pct_chg"].apply(lambda x: 1 if x >= 9.9 else 0)
-            df["is_limit_down"] = df["pct_chg"].apply(lambda x: 1 if x <= -9.9 else 0)
+            df["is_limit_up"] = df["pct_chg"].apply(lambda x: 1 if x >= _LIMIT_THRESHOLD else 0)
+            df["is_limit_down"] = df["pct_chg"].apply(lambda x: 1 if x <= -_LIMIT_THRESHOLD else 0)
 
             with get_connection() as conn:
                 cursor = conn.cursor()
@@ -381,7 +385,7 @@ class DataSyncer:
                     completed += 1
                 return ts_code, 0
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
             futures = [executor.submit(sync_single, code) for code in ts_codes]
             for future in concurrent.futures.as_completed(futures):
                 code, count = future.result()
@@ -646,7 +650,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                     completed += 1
                 return ts_code, 0
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
             futures = [executor.submit(sync_single, code) for code in ts_codes]
             for future in concurrent.futures.as_completed(futures):
                 code, count = future.result()
@@ -798,7 +802,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                     completed += 1
                 return ts_code, 0
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
             futures = [executor.submit(sync_single, code) for code in ts_codes]
             for future in concurrent.futures.as_completed(futures):
                 code, count = future.result()
@@ -937,7 +941,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                     completed += 1
                 return ts_code, 0
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
             futures = [executor.submit(sync_single, code) for code in ts_codes]
             for future in concurrent.futures.as_completed(futures):
                 code, count = future.result()

@@ -22,9 +22,9 @@ portfolio_diagnosis / watchlist / indicators.data_layer）。
 import argparse
 import sys
 import os
-from typing import Optional
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
+
 
 
 # CLI 中文别名 → screener 英文 criteria 的统一映射
@@ -49,7 +49,7 @@ def cmd_analyze(args):
     """分析单只股票"""
     from modules.indicators import analyze_stock
     from modules.indicators.data_layer import get_kline_data, DailyData
-    from modules.strategies import detect_all_strategies, StrategyType
+    from modules.strategies import detect_all_strategies
     from modules.portfolio_diagnosis import diagnose_stock
 
     ts_code = args.ts_code
@@ -380,10 +380,6 @@ def main():
 
     args = parser.parse_args()
 
-    # 取消代理，避免 Tushare 连接问题
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
-
     # 调度表
     handlers = {
         "analyze": cmd_analyze,
@@ -398,4 +394,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # 取消代理，避免 Tushare 连接问题（仅脚本直调时，不影响库导入）
+    os.environ["HTTP_PROXY"] = ""
+    os.environ["HTTPS_PROXY"] = ""
     main()

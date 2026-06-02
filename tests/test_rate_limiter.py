@@ -8,14 +8,9 @@ P1-4 回归测试：data_sync._RateLimiter 模块级限流器
 """
 
 import multiprocessing
-import os
-import subprocess
-import sys
 import time
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

@@ -11,7 +11,6 @@ P2-1 真实数据回归测试：自研指标 vs Tushare 官方 stk_factor
 
 import os
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pandas as pd
 import pytest

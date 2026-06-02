@@ -3,14 +3,11 @@
 测试策略回测、组合回测、资金曲线等功能
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 
 from modules.backtest import (
     Trade,
-    BacktestResult,
-    Position,
     PortfolioBacktestResult,
     backtest_signals,
     _calc_shares,

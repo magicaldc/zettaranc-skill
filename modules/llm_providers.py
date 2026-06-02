@@ -7,7 +7,6 @@ LLM 生成层
 
 import os
 import httpx
-from typing import Optional
 from collections.abc import Generator
 
 

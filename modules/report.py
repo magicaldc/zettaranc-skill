@@ -17,17 +17,16 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from collections import OrderedDict, defaultdict
-from dataclasses import dataclass, field, asdict
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Any
 
 # dotenv 加载已移至 modules/__init__.py
 
 
 # ==================== 板块分类 ====================
 # Z哥风格的"宏观板块"分类（从 generate_report.py 复刻，避免散落）
-MACRO_SECTORS: OrderedDict[str, list[str]] = OrderedDict(
+MACRO_SECTORS: dict[str, list[str]] = dict(
     [
         ("有色/贵金属/矿业", ["小金属", "铜", "黄金", "铝", "铅锌"]),
         ("光通信/电子元器件", ["通信设备", "元器件", "半导体", "IT设备"]),
@@ -323,9 +322,9 @@ def render_assessment(assessments: list[StockAssessment], title: str = "Z哥量�
         ma5_s = _above_below(a.close, a.ma5)
         ma20_s = _above_below(a.close, a.ma20)
         ma60_s = _above_below(a.close, a.ma60)
-        ma5_pct = _fmt_pct((a.close - a.ma5) / a.ma5 * 100) if a.ma5 else "N/A"
-        ma20_pct = _fmt_pct((a.close - a.ma20) / a.ma20 * 100) if a.ma20 else "N/A"
-        ma60_pct = _fmt_pct((a.close - a.ma60) / a.ma60 * 100) if a.ma60 else "N/A"
+        ma5_pct = _fmt_pct((a.close - a.ma5) / a.ma5 * 100) if a.ma5 and a.ma5 != 0 else "N/A"
+        ma20_pct = _fmt_pct((a.close - a.ma20) / a.ma20 * 100) if a.ma20 and a.ma20 != 0 else "N/A"
+        ma60_pct = _fmt_pct((a.close - a.ma60) / a.ma60 * 100) if a.ma60 and a.ma60 != 0 else "N/A"
 
         L.append("  【价格与均线】")
         L.append(f"    收盘价: {a.close:.2f}  涨跌: {a.pct_chg:+.2f}%  量比: {a.vol_ratio:.2f}")
@@ -485,8 +484,8 @@ def render_assessment(assessments: list[StockAssessment], title: str = "Z哥量�
 
 
 def write_assessment(assessments: list[StockAssessment], out_path: str) -> int:
-    """渲染并写入文件，返回写入字节数"""
+    """渲染并写入文件，返回写入字符数"""
     content = render_assessment(assessments)
     with open(out_path, "w", encoding="utf-8") as f:
-        bytes_written = f.write(content)
-    return bytes_written
+        chars_written = f.write(content)
+    return chars_written

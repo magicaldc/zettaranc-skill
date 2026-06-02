@@ -5,7 +5,6 @@
 核心目的：将考试中的判定规则转化为可验证的测试用例
 """
 
-import pytest
 
 
 class TestB1ExamRules:

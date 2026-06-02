@@ -6,7 +6,6 @@ P0-1 回归测试：修 cmd_screen 必崩 + cmd_watchlist scan 静默
 - cmd_watchlist scan 必须读 alerts 字段（不是 stocks）
 """
 
-import argparse
 import sys
 from unittest.mock import patch, MagicMock
 

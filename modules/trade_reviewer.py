@@ -3,11 +3,10 @@
 只负责数据准备，不生成点评（点评由 LLM 用 Z哥角色输出）
 """
 
-from typing import Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 
-from .database import get_connection, save_trade_record, get_trade_record_by_id, get_trade_records
+from .database import save_trade_record, get_trade_records
 from .indicators import analyze_stock
 from .trade_parser import TradeParser, ParseResult
 from .zettaranc_voice import TRADE_REVIEW_PROMPT, JARGON_DICT

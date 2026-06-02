@@ -3,14 +3,12 @@ trade_manager.py 交易记录管理测试
 覆盖修复后的三个函数：get_indicator_data / get_stock_info / match_strategy
 """
 
-import pytest
 from modules.trade_manager import (
     TradeManager,
     get_indicator_data,
     get_stock_info,
     match_strategy,
 )
-from modules.database import save_trade_record, get_connection
 
 
 class TestGetIndicatorData:
@@ -54,7 +52,7 @@ class TestMatchStrategy:
 
 class TestTradeManagerCRUD:
     def test_add_and_get_trade(self, temp_db):
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         today = datetime.now().strftime("%Y-%m-%d")
         mgr = TradeManager()
@@ -76,7 +74,7 @@ class TestTradeManagerCRUD:
         assert trade[0]["action"] == "BUY"
 
     def test_get_stock_holding(self, temp_db):
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         today = datetime.now().strftime("%Y-%m-%d")
         mgr = TradeManager()

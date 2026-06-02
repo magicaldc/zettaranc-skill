@@ -1,4 +1,3 @@
-from typing import Optional
 from .core import StrategyType, StrategySignal, Priority, Action, _calc_kdj
 
 

@@ -4,8 +4,6 @@
 v2.10.0 重构：业务逻辑迁至 modules.report.assess_watchlist + render_assessment
 """
 import argparse
-import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,18 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from modules.report import assess_watchlist, write_assessment
-
-
-def _load_watchlist() -> list:
-    path = os.environ.get("STOCKS_JSON") or str(
-        Path(__file__).resolve().parent.parent / "data" / "stocks_final.json"
-    )
-    with open(path) as f:
-        items = json.load(f)
-    return [
-        item["code"] + ".SH" if item["code"].startswith("6") else item["code"] + ".SZ"
-        for item in items
-    ]
+from scripts._common import load_watchlist
 
 
 def main():
@@ -36,7 +23,7 @@ def main():
     )
     args = p.parse_args()
 
-    ts_codes = _load_watchlist()
+    ts_codes = load_watchlist()
     if not ts_codes:
         print("自选股清单为空")
         return
@@ -50,8 +37,8 @@ def main():
         / "data"
         / f"stocks_assessment_{datetime.now().strftime('%Y%m%d_%H%M')}.md"
     )
-    bytes_written = write_assessment(assessments, out_path)
-    print(f"报告已写入: {out_path} ({bytes_written} 字节)")
+    chars_written = write_assessment(assessments, out_path)
+    print(f"报告已写入: {out_path} ({chars_written} 字符)")
 
 
 if __name__ == "__main__":

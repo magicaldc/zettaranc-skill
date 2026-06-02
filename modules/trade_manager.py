@@ -3,7 +3,7 @@
 封装 trade_records 表的 CRUD 操作
 """
 
-from typing import Optional, Any
+from typing import Any
 from datetime import datetime, timedelta
 from .database import (
     save_trade_record,
@@ -83,7 +83,7 @@ def match_strategy(indicators: dict[str, Any]) -> StrategySignal | None:
         return None
 
     # 匹配交易日期当天或前 5 天内的信号（给一定容错）
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     for fmt in ("%Y-%m-%d", "%Y%m%d"):
         try:

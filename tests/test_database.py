@@ -2,10 +2,7 @@
 database.py 单元测试
 """
 
-import os
-import sqlite3
 import pytest
-from pathlib import Path
 
 
 class TestGetDbPath:

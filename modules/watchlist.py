@@ -3,17 +3,18 @@
 支持批量监控、每日报告、信号提醒、破位预警
 """
 
-import os
-from typing import Any, Optional
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 
-from .database import add_watchlist_item, remove_watchlist_item, get_watchlist, update_watchlist_item
-from .indicators import analyze_stock, get_kline_data
-from .strategies import detect_all_strategies, analyze_kirin_phase, StrategyType, get_kline_data as get_strategy_klines
-from .screener import analyze_stock as screener_analyze
+from .database import add_watchlist_item, remove_watchlist_item, get_watchlist
+from .indicators import analyze_stock
+from .strategies import detect_all_strategies, StrategyType
 
 
 @dataclass
@@ -68,13 +69,15 @@ def scan_watchlist(tags: str | None = None) -> dict[str, Any]:
         # 指标分析
         try:
             ind = analyze_stock(ts_code, days=60)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"指标分析失败 {ts_code}: {e}")
             continue
 
         # 战法信号
         try:
             signals = detect_all_strategies(ts_code, days=60)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"战法信号检测失败 {ts_code}: {e}")
             signals = []
 
         # 1. B1/B2 信号提醒

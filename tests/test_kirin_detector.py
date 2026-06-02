@@ -2,7 +2,6 @@
 麒麟会四阶段识别测试
 """
 
-import pytest
 from datetime import datetime, timedelta
 
 from modules.indicators import DailyData

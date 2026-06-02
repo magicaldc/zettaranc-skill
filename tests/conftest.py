@@ -9,7 +9,6 @@ import tempfile
 import pytest
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 # 确保项目根目录在 path 中
 PROJECT_ROOT = Path(__file__).parent.parent

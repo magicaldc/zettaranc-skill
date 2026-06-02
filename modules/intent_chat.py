@@ -9,7 +9,6 @@
 
 import os
 import sys
-from pathlib import Path
 
 # 清除代理
 for k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:

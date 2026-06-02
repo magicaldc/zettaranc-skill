@@ -3,7 +3,6 @@
 测试 indicator_cache 的保存、加载、内存缓存功能
 """
 
-import pytest
 from datetime import datetime, timedelta
 
 from modules.indicators import (

@@ -12,7 +12,7 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 # try:
@@ -20,7 +20,7 @@ from typing import Any, Optional
 # except ImportError:
 #     from strategies import detect_all_strategies, get_kline_data, Priority
 
-from modules.strategies import detect_all_strategies, get_kline_data, Priority
+from modules.strategies import detect_all_strategies, get_kline_data
 
 
 @dataclass

@@ -2,7 +2,6 @@
 portfolio_diagnosis.py 持股诊断测试
 """
 
-import pytest
 from modules.portfolio_diagnosis import (
     diagnose_stock,
     DiagnosisReport,

@@ -2,12 +2,11 @@
 量价模式检测模块
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from .core import (
     DailyData,
     TradeSignal,
-    IndicatorResult,
     calculate_ma,
     calculate_bbi,
     calculate_kdj,

@@ -3,10 +3,7 @@ setup_wizard.py 配置测试
 """
 
 import os
-import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import patch
 
 from modules.setup_wizard import (
     check_env_exists,

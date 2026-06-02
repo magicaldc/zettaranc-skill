@@ -4,11 +4,10 @@
 """
 
 import re
-from datetime import datetime, date
-from typing import Optional, Any
+from datetime import datetime
+from typing import Any
 from dataclasses import dataclass
 
-from .database import get_trade_record_by_id, update_trade_record
 
 
 @dataclass

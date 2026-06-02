@@ -6,7 +6,7 @@
 import os
 import sqlite3
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 from collections.abc import Generator
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -75,9 +75,9 @@ def get_connection() -> Generator[sqlite3.Connection, None, None]:
     try:
         yield conn
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        raise e
+        raise
     finally:
         conn.close()
 

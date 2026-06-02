@@ -8,10 +8,9 @@ Tushare 中转 API 客户端
 import os
 import time
 import logging
-from typing import Optional
 
 try:
-    import requests
+    import requests  # noqa: F401  可用性检查
     import pandas as pd
     import tushare as ts
 except ImportError:

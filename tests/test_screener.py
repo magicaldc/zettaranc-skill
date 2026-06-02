@@ -2,7 +2,6 @@
 screener.py 选股测试
 """
 
-import pytest
 from modules.screener import (
     StockScore,
     MarketStatus,

@@ -2,7 +2,6 @@
 三波理论测试
 """
 
-import pytest
 from datetime import datetime, timedelta
 
 from modules.indicators import DailyData
@@ -11,8 +10,6 @@ from modules.indicators.wave_theory import (
     classify_wave_for_b1,
     _find_recent_low,
     _count_limit_up,
-    _calculate_red_ratio,
-    _calculate_avg_daily_gain,
 )
 
 

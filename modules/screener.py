@@ -4,9 +4,9 @@
 """
 
 import sqlite3
-from typing import Any, Optional
+from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 
 # 数据库路径

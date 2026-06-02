@@ -5,7 +5,6 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 
