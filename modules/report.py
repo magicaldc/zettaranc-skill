@@ -226,9 +226,11 @@ def _fmt_pct(p: float | None) -> str:
     return f"{p:+.2f}%"
 
 
-def _fmt_opt(v: float | None, decimals: int = 2, suffix: str = "") -> str:
+def _fmt_opt(v: float | None, decimals: int = 2, suffix: str = "", sign: bool = False) -> str:
     if v is None:
         return "N/A"
+    if sign:
+        return f"{v:+.{decimals}f}{suffix}"
     return f"{v:.{decimals}f}{suffix}"
 
 
@@ -448,9 +450,9 @@ def render_assessment(assessments: list[StockAssessment], title: str = "Z哥量�
         if s.signal == "B1":
             L.append(f"  ★ {name}({code}) — B1买入信号")
             pe_s = f"{s.pe:.1f}" if s.pe is not None else "N/A"
-            L.append(
-                f"    PE={pe_s}, RSI={s.rsi6:.1f if s.rsi6 is not None else 'N/A'}, MACD柱={s.macd_hist:+.3f if s.macd_hist is not None else 'N/A'}"
-            )
+            rsi_s = f"{s.rsi6:.1f}" if s.rsi6 is not None else "N/A"
+            macd_s = f"{s.macd_hist:+.3f}" if s.macd_hist is not None else "N/A"
+            L.append(f"    PE={pe_s}, RSI={rsi_s}, MACD柱={macd_s}")
             if s.rsi6 is not None and s.rsi6 < 25:
                 L.append("    极度超卖+买入信号共振，短线反弹概率大")
             if s.dif is not None and s.dif < 0 and s.macd_hist is not None and s.macd_hist > 0:
