@@ -287,9 +287,7 @@ class ShaofuLoopEngine:
         """
         return current.close < entry_low
 
-    def check_lu_zhu(
-        self, recent_klines: list[DailyData], white_line: float
-    ) -> bool:
+    def check_lu_zhu(self, recent_klines: list[DailyData], white_line: float) -> bool:
         """
         Step 5: 检查卤煮止盈条件（公开接口）
 
@@ -315,9 +313,7 @@ class ShaofuLoopEngine:
             return False
 
         # 条件 2: 连续两根阳线（close >= open，含十字星）
-        two_consecutive_yang = (
-            today.close >= today.open and yesterday.close >= yesterday.open
-        )
+        two_consecutive_yang = today.close >= today.open and yesterday.close >= yesterday.open
         if not two_consecutive_yang:
             return False
 
@@ -327,9 +323,7 @@ class ShaofuLoopEngine:
 
         return True
 
-    def check_white_line_exit(
-        self, closes: list[float], white_values: list[float]
-    ) -> bool:
+    def check_white_line_exit(self, closes: list[float], white_values: list[float]) -> bool:
         """
         Step 6: 检查白线两日破位（公开接口）
 
@@ -351,9 +345,7 @@ class ShaofuLoopEngine:
     # 内部检查方法（供 run_stock 循环使用）
     # ----------------------------------------------------------
 
-    def _check_entry_internal(
-        self, klines: list[DailyData], day_idx: int
-    ) -> dict[str, Any] | None:
+    def _check_entry_internal(self, klines: list[DailyData], day_idx: int) -> dict[str, Any] | None:
         """
         内部入口检查（供 run_stock 逐日调用）
 
@@ -386,9 +378,7 @@ class ShaofuLoopEngine:
         """
         return self.check_stop_loss(klines[day_idx], trade.stop_loss_price)
 
-    def _check_lu_zhu_internal(
-        self, klines: list[DailyData], day_idx: int
-    ) -> bool:
+    def _check_lu_zhu_internal(self, klines: list[DailyData], day_idx: int) -> bool:
         """
         内部卤煮检查
 
@@ -409,9 +399,7 @@ class ShaofuLoopEngine:
         white = calculate_zg_white(sub)
         return self.check_lu_zhu(sub[-3:], white)
 
-    def _check_white_line_exit_internal(
-        self, klines: list[DailyData], day_idx: int
-    ) -> bool:
+    def _check_white_line_exit_internal(self, klines: list[DailyData], day_idx: int) -> bool:
         """
         内部白线破位检查
 
@@ -438,9 +426,7 @@ class ShaofuLoopEngine:
 
         return self.check_white_line_exit(closes, white_values)
 
-    def _check_dead_cross_exit(
-        self, klines: list[DailyData], day_idx: int
-    ) -> bool:
+    def _check_dead_cross_exit(self, klines: list[DailyData], day_idx: int) -> bool:
         """
         检查白线死叉黄线（紧急离场）
 
@@ -461,9 +447,7 @@ class ShaofuLoopEngine:
         is_gold, is_dead = detect_double_line_cross(sub)
         return is_dead
 
-    def _check_n_structure(
-        self, klines: list[DailyData], day_idx: int
-    ) -> bool:
+    def _check_n_structure(self, klines: list[DailyData], day_idx: int) -> bool:
         """
         检查 N 型上移结构
 
@@ -503,9 +487,7 @@ class ShaofuLoopEngine:
     # 主循环
     # ----------------------------------------------------------
 
-    def run_stock(
-        self, klines: list[DailyData], ts_code: str = ""
-    ) -> list[LoopTrade]:
+    def run_stock(self, klines: list[DailyData], ts_code: str = "") -> list[LoopTrade]:
         """
         对一只股票运行完整的六步闭环
 
@@ -537,9 +519,7 @@ class ShaofuLoopEngine:
                 if signal is not None:
                     # 开仓
                     entry_price = klines[day_idx].close
-                    stop_loss = _calc_stop_loss_price(
-                        klines, day_idx, self.config.stop_loss_method
-                    )
+                    stop_loss = _calc_stop_loss_price(klines, day_idx, self.config.stop_loss_method)
                     current_trade = LoopTrade(
                         ts_code=ts_code,
                         entry_date=klines[day_idx].trade_date,
@@ -551,17 +531,9 @@ class ShaofuLoopEngine:
                 # 持仓阶段：逐日检查止损/止盈/离场
                 # 更新浮盈浮亏
                 current_price = klines[day_idx].close
-                pnl_pct = (
-                    (current_price - current_trade.entry_price)
-                    / current_trade.entry_price
-                    * 100
-                )
-                current_trade.max_favorable = max(
-                    current_trade.max_favorable, pnl_pct
-                )
-                current_trade.max_adverse = min(
-                    current_trade.max_adverse, pnl_pct
-                )
+                pnl_pct = (current_price - current_trade.entry_price) / current_trade.entry_price * 100
+                current_trade.max_favorable = max(current_trade.max_favorable, pnl_pct)
+                current_trade.max_adverse = min(current_trade.max_adverse, pnl_pct)
                 current_trade.holding_days += 1
 
                 # Step 4: 收盘价止损（始终检查，不受 min_holding_days 限制）
@@ -624,11 +596,7 @@ class ShaofuLoopEngine:
         # 数据末尾：强制平仓
         if current_trade is not None and klines:
             last = klines[-1]
-            pnl_pct = (
-                (last.close - current_trade.entry_price)
-                / current_trade.entry_price
-                * 100
-            )
+            pnl_pct = (last.close - current_trade.entry_price) / current_trade.entry_price * 100
             current_trade.exit_date = last.trade_date
             current_trade.exit_price = last.close
             current_trade.exit_reason = "数据末尾"
@@ -666,9 +634,7 @@ class ShaofuLoopEngine:
             signal = self._check_entry_internal(klines, day_idx)
             if signal is not None:
                 entry_price = klines[day_idx].close
-                stop_loss = _calc_stop_loss_price(
-                    klines, day_idx, self.config.stop_loss_method
-                )
+                stop_loss = _calc_stop_loss_price(klines, day_idx, self.config.stop_loss_method)
                 new_trade = LoopTrade(
                     ts_code=ts_code,
                     entry_date=klines[day_idx].trade_date,
@@ -681,11 +647,7 @@ class ShaofuLoopEngine:
 
         # 持仓中：更新浮盈浮亏
         current_price = klines[day_idx].close
-        pnl_pct = (
-            (current_price - current_trade.entry_price)
-            / current_trade.entry_price
-            * 100
-        )
+        pnl_pct = (current_price - current_trade.entry_price) / current_trade.entry_price * 100
         current_trade.max_favorable = max(current_trade.max_favorable, pnl_pct)
         current_trade.max_adverse = min(current_trade.max_adverse, pnl_pct)
         current_trade.holding_days += 1
@@ -744,15 +706,9 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(
-        description="少妇战法六步闭环引擎"
-    )
-    parser.add_argument(
-        "ts_code", help="股票代码，如 600487.SH"
-    )
-    parser.add_argument(
-        "--days", type=int, default=240, help="回测天数（默认 240）"
-    )
+    parser = argparse.ArgumentParser(description="少妇战法六步闭环引擎")
+    parser.add_argument("ts_code", help="股票代码，如 600487.SH")
+    parser.add_argument("--days", type=int, default=240, help="回测天数（默认 240）")
     parser.add_argument(
         "--j-threshold",
         type=float,

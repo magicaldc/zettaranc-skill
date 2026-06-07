@@ -210,9 +210,7 @@ def cmd_analyze(args):
         if wave_data["stats"]:
             s = wave_data["stats"]
             print(f"    低点→当前: {s['low_price']:.1f}→{s['high_price']:.1f} 涨幅{s['gain_pct']:.1f}%")
-            print(
-                f"    涨停{s['limit_up_count']}次 阳线占比{s['red_ratio'] * 100:.0f}% 日均{s['avg_daily_gain']:.2f}%"
-            )
+            print(f"    涨停{s['limit_up_count']}次 阳线占比{s['red_ratio'] * 100:.0f}% 日均{s['avg_daily_gain']:.2f}%")
     if kirin_data:
         print(f"  麒麟会: {kirin_data['stage']} (conf={kirin_data['confidence']}) → {kirin_data['operation']}")
         if kirin_data["sub_type"] != "未知":
@@ -246,7 +244,9 @@ def cmd_analyze(args):
 
     print("\n【综合评分】")
     print(f"  总分: {score.score:.1f}  {score.rating}")
-    print(f"  B1评分: {score.b1_score:.1f}  趋势: {score.trend_score:.1f}  量价: {score.volume_score:.1f}  风险: {score.risk_score:.1f}")
+    print(
+        f"  B1评分: {score.b1_score:.1f}  趋势: {score.trend_score:.1f}  量价: {score.volume_score:.1f}  风险: {score.risk_score:.1f}"
+    )
     if score.reasons:
         print(f"  理由: {', '.join(score.reasons[:5])}")
     if score.warnings:
@@ -389,11 +389,13 @@ def cmd_watchlist(args):
             for a in alerts:
                 if a.ts_code not in stock_map:
                     stock_map[a.ts_code] = {"ts_code": a.ts_code, "name": a.name, "signals": [], "alerts": []}
-                stock_map[a.ts_code]["alerts"].append({
-                    "alert_type": a.alert_type,
-                    "level": a.level,
-                    "message": a.message,
-                })
+                stock_map[a.ts_code]["alerts"].append(
+                    {
+                        "alert_type": a.alert_type,
+                        "level": a.level,
+                        "message": a.message,
+                    }
+                )
             json_result = {
                 "count": len(stock_map),
                 "stocks": list(stock_map.values()),

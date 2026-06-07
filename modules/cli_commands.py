@@ -55,15 +55,17 @@ def _shaofu_result_to_dict(result: Any) -> dict:
     """
     trades = []
     for t in result.trades:
-        trades.append({
-            "entry_date": t.entry_date,
-            "entry_price": t.entry_price,
-            "exit_date": t.exit_date,
-            "exit_price": t.exit_price,
-            "exit_reason": t.exit_reason,
-            "pnl_pct": round(t.pnl_pct * 100, 2),  # 转为百分比数值
-            "holding_days": t.holding_days,
-        })
+        trades.append(
+            {
+                "entry_date": t.entry_date,
+                "entry_price": t.entry_price,
+                "exit_date": t.exit_date,
+                "exit_price": t.exit_price,
+                "exit_reason": t.exit_reason,
+                "pnl_pct": round(t.pnl_pct * 100, 2),  # 转为百分比数值
+                "holding_days": t.holding_days,
+            }
+        )
 
     return {
         "ts_code": result.ts_code,
@@ -90,15 +92,17 @@ def _portfolio_result_to_dict(result: Any) -> dict:
     """
     trades = []
     for t in result.trades:
-        trades.append({
-            "ts_code": t.ts_code,
-            "entry_date": t.entry_date,
-            "entry_price": round(t.entry_price, 2),
-            "exit_date": t.exit_date,
-            "exit_price": round(t.exit_price, 2) if t.exit_price else None,
-            "exit_reason": t.exit_reason,
-            "pnl_pct": round(t.pnl_pct * 100, 2),
-        })
+        trades.append(
+            {
+                "ts_code": t.ts_code,
+                "entry_date": t.entry_date,
+                "entry_price": round(t.entry_price, 2),
+                "exit_date": t.exit_date,
+                "exit_price": round(t.exit_price, 2) if t.exit_price else None,
+                "exit_reason": t.exit_reason,
+                "pnl_pct": round(t.pnl_pct * 100, 2),
+            }
+        )
 
     return {
         "initial_capital": result.initial_capital,
@@ -173,6 +177,7 @@ def cmd_backtest(args) -> None:
             _json_output(_shaofu_result_to_dict(result))
         else:
             from .backtest_six_step import summary_text
+
             print(summary_text(result))
 
     # ── multi: 多策略融合回测 ──
@@ -213,6 +218,7 @@ def cmd_backtest(args) -> None:
                 _json_output(_shaofu_result_to_dict(result))
             else:
                 from .backtest_six_step import summary_text
+
                 print(summary_text(result))
         else:
             from .backtest_six_step import backtest_shaofu_portfolio
@@ -233,8 +239,7 @@ def cmd_backtest(args) -> None:
                 print(f"{'=' * 60}")
                 for r in result.get("results", []):
                     status = "有交易" if r.total_trades > 0 else "无交易"
-                    print(f"  {r.ts_code}: {status} {r.total_trades}笔 "
-                          f"胜率{r.win_rate:.0%} 收益{r.total_return:+.2%}")
+                    print(f"  {r.ts_code}: {status} {r.total_trades}笔 胜率{r.win_rate:.0%} 收益{r.total_return:+.2%}")
 
     else:
         _error(f"未知回测子命令: {sub}")
@@ -269,7 +274,7 @@ def cmd_trade(args) -> None:
     if sub == "add":
         text = getattr(args, "text", None)
         if not text:
-            _error("请输入交易描述，如: trade add \"4月25号买了100股茅台，1800块\"")
+            _error('请输入交易描述，如: trade add "4月25号买了100股茅台，1800块"')
 
         from .trade_parser import TradeParser
         from .trade_manager import TradeManager
@@ -286,11 +291,13 @@ def cmd_trade(args) -> None:
 
         # 展示解析结果
         if use_json:
-            _json_output({
-                "parsed": data,
-                "confidence": result.confidence,
-                "missing_fields": result.missing_fields,
-            })
+            _json_output(
+                {
+                    "parsed": data,
+                    "confidence": result.confidence,
+                    "missing_fields": result.missing_fields,
+                }
+            )
             return
 
         # 文本模式：显示解析确认
@@ -365,23 +372,25 @@ def cmd_trade(args) -> None:
         ctx = reviewer.check_if_complete_trade(ctx)
 
         if use_json:
-            _json_output({
-                "ts_code": ctx.ts_code,
-                "name": ctx.name,
-                "trade_date": ctx.trade_date,
-                "action": ctx.action,
-                "price": ctx.price,
-                "quantity": ctx.quantity,
-                "amount": ctx.amount,
-                "reason": ctx.reason,
-                "avg_cost": ctx.avg_cost,
-                "profit_pct": ctx.profit_pct,
-                "holding_days": ctx.holding_days,
-                "signal_type": ctx.signal_type,
-                "is_complete_trade": ctx.is_complete_trade,
-                "indicators": ctx.indicators,
-                "prompt": ctx.get_full_prompt(),
-            })
+            _json_output(
+                {
+                    "ts_code": ctx.ts_code,
+                    "name": ctx.name,
+                    "trade_date": ctx.trade_date,
+                    "action": ctx.action,
+                    "price": ctx.price,
+                    "quantity": ctx.quantity,
+                    "amount": ctx.amount,
+                    "reason": ctx.reason,
+                    "avg_cost": ctx.avg_cost,
+                    "profit_pct": ctx.profit_pct,
+                    "holding_days": ctx.holding_days,
+                    "signal_type": ctx.signal_type,
+                    "is_complete_trade": ctx.is_complete_trade,
+                    "indicators": ctx.indicators,
+                    "prompt": ctx.get_full_prompt(),
+                }
+            )
         else:
             print(ctx.to_llm_prompt())
             print()
@@ -470,25 +479,29 @@ def cmd_daily(args) -> None:
                 "alerts": [],
             }
             for a in alerts:
-                watchlist_scan["alerts"].append({
-                    "ts_code": a.ts_code,
-                    "name": a.name,
-                    "alert_type": a.alert_type,
-                    "level": a.level,
-                    "message": a.message,
-                })
+                watchlist_scan["alerts"].append(
+                    {
+                        "ts_code": a.ts_code,
+                        "name": a.name,
+                        "alert_type": a.alert_type,
+                        "level": a.level,
+                        "message": a.message,
+                    }
+                )
             report["watchlist_scan"] = watchlist_scan
 
             # 收集观察池中的信号
             for a in alerts:
                 if a.alert_type in ("B1", "B2", "EXIT"):
-                    report["signals"].append({
-                        "ts_code": a.ts_code,
-                        "name": a.name,
-                        "signal": a.alert_type,
-                        "message": a.message,
-                        "source": "watchlist",
-                    })
+                    report["signals"].append(
+                        {
+                            "ts_code": a.ts_code,
+                            "name": a.name,
+                            "signal": a.alert_type,
+                            "message": a.message,
+                            "source": "watchlist",
+                        }
+                    )
         else:
             report["watchlist_scan"] = {"total": 0, "alerts": []}
     except Exception as e:
@@ -513,13 +526,15 @@ def cmd_daily(args) -> None:
             top_picks.append(pick)
             # 汇总 B1 信号
             if s.b1_score >= 50:
-                report["signals"].append({
-                    "ts_code": s.ts_code,
-                    "name": s.name,
-                    "signal": "B1",
-                    "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
-                    "source": "screener",
-                })
+                report["signals"].append(
+                    {
+                        "ts_code": s.ts_code,
+                        "name": s.name,
+                        "signal": "B1",
+                        "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
+                        "source": "screener",
+                    }
+                )
         report["top_picks"] = top_picks
     except Exception as e:
         _warn(f"全市场选股失败: {e}")
@@ -543,15 +558,19 @@ def cmd_daily(args) -> None:
         for code in check_codes:
             try:
                 diag = diagnose_stock(code, days=60)
-                portfolio_status.append({
-                    "ts_code": code,
-                    "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
-                })
+                portfolio_status.append(
+                    {
+                        "ts_code": code,
+                        "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
+                    }
+                )
             except Exception as e:
-                portfolio_status.append({
-                    "ts_code": code,
-                    "error": str(e),
-                })
+                portfolio_status.append(
+                    {
+                        "ts_code": code,
+                        "error": str(e),
+                    }
+                )
         report["portfolio_status"] = portfolio_status
     except Exception as e:
         _warn(f"持仓检查失败: {e}")
@@ -609,8 +628,10 @@ def cmd_daily(args) -> None:
         if isinstance(report["top_picks"], list) and report["top_picks"]:
             print("\n【B1 潜力股 TOP 10】")
             for i, s in enumerate(report["top_picks"], 1):
-                print(f"  {i:2}. {s['ts_code']} {s['name']:<8} "
-                      f"评分:{s['score']:5.1f}  B1:{s['b1_score']:5.1f}  {s['rating']}")
+                print(
+                    f"  {i:2}. {s['ts_code']} {s['name']:<8} "
+                    f"评分:{s['score']:5.1f}  B1:{s['b1_score']:5.1f}  {s['rating']}"
+                )
 
         # 持仓
         if report["portfolio_status"]:

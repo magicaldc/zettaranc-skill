@@ -250,7 +250,7 @@ class TestRunStock:
         """纯下跌行情，无 B1 信号 → 空交易记录"""
         engine = ShaofuLoopEngine()
         # 120 天持续下跌
-        prices = [200.0 * (0.995 ** i) for i in range(120)]
+        prices = [200.0 * (0.995**i) for i in range(120)]
         klines = make_klines_seq(prices)
         trades = engine.run_stock(klines)
         assert isinstance(trades, list)

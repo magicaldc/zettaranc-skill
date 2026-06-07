@@ -355,7 +355,9 @@ def format_report(report: DiagnosisReport) -> str:
     lines.append("")
     lines.append(f"麒麟会阶段: {report.kirin_phase} (置信度{report.kirin_confidence * 100:.0f}%)")
     lines.append("")
-    lines.append(f"牛绳理论: {report.bull_rope_status} (缺口{report.bull_rope_gap_pct:+.1f}%, 白线{report.bull_rope_white_trend})")
+    lines.append(
+        f"牛绳理论: {report.bull_rope_status} (缺口{report.bull_rope_gap_pct:+.1f}%, 白线{report.bull_rope_white_trend})"
+    )
     lines.append(f"沙漏评分: {report.sandglass_score:.0f}/100 {'✨ 完美图形' if report.sandglass_is_perfect else ''}")
     if report.is_centipede:
         lines.append(f"⚠️ 蜈蚣图: {report.centipede_score:.0f}分 — 呼吸紊乱，直接排除不碰")

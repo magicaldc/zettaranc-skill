@@ -302,10 +302,7 @@ def summary_text(result: ShaofuBacktestResult) -> str:
         for t in result.trades[-5:]:
             pnl = t.pnl_pct if hasattr(t, "pnl_pct") else 0.0
             marker = "+" if pnl > 0 else ""
-            lines.append(
-                f"  {t.entry_date}->{t.exit_date or '持有中'} "
-                f"{marker}{pnl:.2f}%"
-            )
+            lines.append(f"  {t.entry_date}->{t.exit_date or '持有中'} {marker}{pnl:.2f}%")
 
     return "\n".join(lines)
 
