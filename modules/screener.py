@@ -572,7 +572,7 @@ def analyze_stock(ts_code: str, klines: Optional[list[dict]] = None) -> StockSco
 # ==================== 并行化 Worker ====================
 
 
-def _analyze_worker(ts_code: str) -> tuple[str, Optional[list[dict], StockScore]]:
+def _analyze_worker(ts_code: str) -> tuple[str, Optional[tuple[list[dict], StockScore]]]:
     """
     并行 worker：评分单只股票
     必须在模块顶层定义，以便 ProcessPoolExecutor 可以 pickle

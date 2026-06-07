@@ -13,8 +13,8 @@ Z哥量化评估报告生成模块（v2.10.0 重构自 scripts/generate_report.p
 - write_assessment(assessments, out_path) -> int  # 写入文件，返回字节数
 """
 
-from typing import Optional
 from __future__ import annotations
+from typing import Optional
 
 import os
 import sqlite3
