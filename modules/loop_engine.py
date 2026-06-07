@@ -55,6 +55,8 @@ class LoopConfig:
     stop_loss_pct: float = -0.07  # 止损比例（负值，默认 -7%）
     stop_loss_method: str = "entry_low"  # "entry_low" | "n_structure_low" | "j_negative_low"
     bbi_break_days: int = 2  # BBI 连续跌破天数触发离场
+    bbi_break_threshold: float = 0.01  # 收盘价低于 BBI 超过此比例才算"跌破"（1%）
+    min_holding_days: int = 3  # 最少持仓天数（避免入场后次日就被震出）
     lu_half: bool = True  # 卤煮减半（站上BBI+连续两根阳线→减半）
     position_pct: float = 0.3  # 单笔仓位比例
     vol_shrink_threshold: float = 0.8  # 缩量判定阈值（当日量 / 前日量 < 此值视为缩量）
@@ -85,7 +87,7 @@ class LoopTrade:
 
 
 def detect_bbi_break_streak(
-    closes: list[float], bbi_values: list[float], days: int = 2
+    closes: list[float], bbi_values: list[float], days: int = 2, threshold: float = 0.0
 ) -> bool:
     """
     检测收盘价是否连续 N 天跌破 BBI
@@ -94,6 +96,7 @@ def detect_bbi_break_streak(
         closes: 收盘价序列
         bbi_values: BBI 值序列（与 closes 等长）
         days: 连续跌破天数要求
+        threshold: 跌破阈值比例（0.01 = 收盘价低于 BBI 1% 才算跌破）
 
     Returns:
         是否连续 N 天跌破
@@ -102,7 +105,7 @@ def detect_bbi_break_streak(
         return False
 
     for i in range(1, days + 1):
-        if closes[-i] >= bbi_values[-i]:
+        if closes[-i] >= bbi_values[-i] * (1 - threshold):
             return False
 
     return True
@@ -325,7 +328,7 @@ class ShaofuLoopEngine:
             是否触发 BBI 两日破位离场
         """
         return detect_bbi_break_streak(
-            closes, bbi_values, self.config.bbi_break_days
+            closes, bbi_values, self.config.bbi_break_days, self.config.bbi_break_threshold
         )
 
     # ----------------------------------------------------------
@@ -550,7 +553,7 @@ class ShaofuLoopEngine:
                 )
                 current_trade.holding_days += 1
 
-                # Step 4: 收盘价止损
+                # Step 4: 收盘价止损（始终检查，不受 min_holding_days 限制）
                 if self._check_stop_loss_internal(klines, day_idx, current_trade):
                     current_trade.exit_date = klines[day_idx].trade_date
                     current_trade.exit_price = current_price
@@ -560,7 +563,7 @@ class ShaofuLoopEngine:
                     current_trade = None
                     continue
 
-                # 紧急离场：S1/S2/S3
+                # 紧急离场：S1/S2/S3（始终检查）
                 if self._check_s_exit(klines, day_idx):
                     current_trade.exit_date = klines[day_idx].trade_date
                     current_trade.exit_price = current_price
@@ -568,6 +571,10 @@ class ShaofuLoopEngine:
                     current_trade.pnl_pct = pnl_pct
                     completed_trades.append(current_trade)
                     current_trade = None
+                    continue
+
+                # 最少持仓天数保护：避免入场后次日被震出
+                if current_trade.holding_days < self.config.min_holding_days:
                     continue
 
                 # Step 6: BBI 两日破位（全仓离场）
