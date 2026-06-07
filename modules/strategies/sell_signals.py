@@ -121,7 +121,7 @@ def detect_s2(klines: list[dict] | None, index: int, dif_list: list[float]) -> S
 
     dif_list: 可选的外部 MACD DIF 序列，避免重复计算
     """
-    if index < 30:
+    if klines is None or index < 30:
         return None
 
     today = klines[index]
