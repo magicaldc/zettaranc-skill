@@ -4,7 +4,7 @@
 """
 
 import sqlite3
-from typing import Any
+from typing import Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
@@ -459,7 +459,7 @@ def score_risk(klines: list[dict]) -> tuple[float, list[str]]:
     return max(0, min(100, score)), warnings
 
 
-def analyze_stock(ts_code: str, klines: list[dict] | None = None) -> StockScore:
+def analyze_stock(ts_code: str, klines: Optional[list[dict]] = None) -> StockScore:
     """
     综合评分单只股票
     """
@@ -572,7 +572,7 @@ def analyze_stock(ts_code: str, klines: list[dict] | None = None) -> StockScore:
 # ==================== 并行化 Worker ====================
 
 
-def _analyze_worker(ts_code: str) -> tuple[str, list[dict], StockScore] | None:
+def _analyze_worker(ts_code: str) -> tuple[str, Optional[list[dict], StockScore]]:
     """
     并行 worker：评分单只股票
     必须在模块顶层定义，以便 ProcessPoolExecutor 可以 pickle

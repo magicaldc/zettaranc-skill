@@ -13,6 +13,7 @@ Z哥量化评估报告生成模块（v2.10.0 重构自 scripts/generate_report.p
 - write_assessment(assessments, out_path) -> int  # 写入文件，返回字节数
 """
 
+from typing import Optional
 from __future__ import annotations
 
 import os
@@ -70,20 +71,20 @@ class StockAssessment:
     vol_ratio: float = 0
 
     # 指标
-    ma5: float | None = None
-    ma20: float | None = None
-    ma60: float | None = None
-    k: float | None = None
-    d: float | None = None
-    j: float | None = None
-    dif: float | None = None
-    dea: float | None = None
-    macd_hist: float | None = None
-    rsi6: float | None = None
-    rsi12: float | None = None
-    boll_mid: float | None = None
-    boll_upper: float | None = None
-    boll_lower: float | None = None
+    ma5: Optional[float] = None
+    ma20: Optional[float] = None
+    ma60: Optional[float] = None
+    k: Optional[float] = None
+    d: Optional[float] = None
+    j: Optional[float] = None
+    dif: Optional[float] = None
+    dea: Optional[float] = None
+    macd_hist: Optional[float] = None
+    rsi6: Optional[float] = None
+    rsi12: Optional[float] = None
+    boll_mid: Optional[float] = None
+    boll_upper: Optional[float] = None
+    boll_lower: Optional[float] = None
 
     # 信号
     signal: str = "WATCH"
@@ -92,8 +93,8 @@ class StockAssessment:
     brick_trend: str = "NEUTRAL"
 
     # 估值
-    pe: float | None = None
-    pb: float | None = None
+    pe: Optional[float] = None
+    pb: Optional[float] = None
 
     has_indicator: bool = False  # True = 指标已计算；False = 仅有基本信息
 
@@ -205,7 +206,7 @@ def _build_assessments_from_db(
 
 def assess_watchlist(
     ts_codes: list[str],
-    db_path: str | None = None,
+    db_path: Optional[str] = None,
 ) -> list[StockAssessment]:
     """
     顶层 API：评估一组股票，返回 StockAssessment 列表
@@ -220,13 +221,13 @@ def assess_watchlist(
 
 
 # ==================== 文本格式化工具 ====================
-def _fmt_pct(p: float | None) -> str:
+def _fmt_pct(p: Optional[float]) -> str:
     if p is None:
         return "N/A"
     return f"{p:+.2f}%"
 
 
-def _fmt_opt(v: float | None, decimals: int = 2, suffix: str = "", sign: bool = False) -> str:
+def _fmt_opt(v: Optional[float], decimals: int = 2, suffix: str = "", sign: bool = False) -> str:
     if v is None:
         return "N/A"
     if sign:
@@ -234,7 +235,7 @@ def _fmt_opt(v: float | None, decimals: int = 2, suffix: str = "", sign: bool = 
     return f"{v:.{decimals}f}{suffix}"
 
 
-def _above_below(close: float, ma: float | None) -> str:
+def _above_below(close: float, ma: Optional[float]) -> str:
     if ma is None or ma == 0:
         return "N/A"
     if close > ma:

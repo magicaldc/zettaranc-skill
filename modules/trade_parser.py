@@ -5,7 +5,7 @@
 
 import re
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 from dataclasses import dataclass
 
 
@@ -15,7 +15,7 @@ class ParseResult:
 
     success: bool
     confidence: float  # 0-1 置信度
-    data: dict[str, Any] | None
+    data: Optional[dict[str, Any]]
     missing_fields: list  # 缺失的字段
     error_message: str = ""
 

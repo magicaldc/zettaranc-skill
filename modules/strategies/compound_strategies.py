@@ -1,7 +1,8 @@
+from typing import Optional
 from .core import StrategyType, StrategySignal, Priority, Action, _calc_kdj
 
 
-def detect_changan(klines: list[dict], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
+def detect_changan(klines: list[dict], index: int, kirin_context: Optional[dict] = None) -> Optional[StrategySignal]:
     """
     检测长安战法（已升级 MDC 验证 + 麒麟背景）
 
@@ -72,7 +73,7 @@ def detect_changan(klines: list[dict], index: int, kirin_context: dict | None = 
     )
 
 
-def detect_sifen_zhiyi_sanyin(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_sifen_zhiyi_sanyin(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测四分之三阴量战法
 
@@ -115,7 +116,7 @@ def detect_sifen_zhiyi_sanyin(klines: list[dict], index: int) -> StrategySignal 
     return None
 
 
-def detect_nana(klines: list[dict], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
+def detect_nana(klines: list[dict], index: int, kirin_context: Optional[dict] = None) -> Optional[StrategySignal]:
     """
     检测娜娜图形（已升级 MDC 验证）
 
@@ -189,7 +190,7 @@ def detect_nana(klines: list[dict], index: int, kirin_context: dict | None = Non
     )
 
 
-def detect_yidong_dilian(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_yidong_dilian(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测异动+地量地价战法
 
@@ -246,7 +247,7 @@ def detect_yidong_dilian(klines: list[dict], index: int) -> StrategySignal | Non
     )
 
 
-def detect_pinghang(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_pinghang(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测平行重炮 / 多门重炮
 
@@ -324,7 +325,7 @@ def detect_pinghang(klines: list[dict], index: int) -> StrategySignal | None:
     )
 
 
-def detect_kengqi(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_kengqi(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测坑里起好货 / 填坑战法
 
@@ -394,7 +395,7 @@ def detect_kengqi(klines: list[dict], index: int) -> StrategySignal | None:
     )
 
 
-def detect_duichen_va(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_duichen_va(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测对称 VA 战法
 

@@ -9,6 +9,8 @@ PHASE2_SYNTHESIS.md
 # 本地数据（SQLite 数据库，体积大且个人化，不入库）
 data/*.db
 data/*.db-journal
+data/*.db-shm
+data/*.db-wal
 
 # 原始语料（体积大、版权问题，仓库中仅保留调研提炼文件和 SKILL.md）
 references/sources/
@@ -51,8 +53,9 @@ CLAUDE.md
 CLAUDE.md.bak
 .omc/
 
-# 文档（临时文档产物，不入库）
-docs/
-
 # 对话实录（临时文件，不入库）
 对话实录*.md
+
+# 日志文件（临时文件，不入库）
+logs/*.log
+logs/*.jsonl

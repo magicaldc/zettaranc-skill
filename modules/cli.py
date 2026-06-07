@@ -496,6 +496,106 @@ def cmd_sync(args):
                 print(f"  {s['data_type']}: {s.get('last_date', 'N/A')} ({s.get('status', 'N/A')})")
 
 
+
+def cmd_track(args):
+    """跟踪池管理（add / remove / list / info / status / stats）"""
+    from modules.tracking_manager import TrackingManager
+    import json
+
+    manager = TrackingManager()
+
+    action = args.track_action
+
+    if action == "add":
+        if not args.ts_code:
+            print("错误：添加股票需要指定股票代码")
+            return
+        success = manager.add_stock(
+            ts_code=args.ts_code,
+            name=args.name,
+            reason=args.reason,
+            strategy_tags=args.strategy,
+            notes=args.notes
+        )
+        if args.json:
+            print(json.dumps({"success": success}, ensure_ascii=False))
+
+    elif action == "remove":
+        if not args.ts_code:
+            print("错误：移除股票需要指定股票代码")
+            return
+        success = manager.remove_stock(ts_code=args.ts_code, reason=args.reason)
+        if args.json:
+            print(json.dumps({"success": success}, ensure_ascii=False))
+
+    elif action == "list":
+        stocks = manager.list_stocks(status=args.status, strategy_tag=args.strategy[0] if args.strategy else None)
+        if args.json:
+            print(json.dumps(stocks, ensure_ascii=False, indent=2))
+        else:
+            if not stocks:
+                print("跟踪池为空")
+                return
+            print(f"\n跟踪池（状态：{args.status}）")
+            print("-" * 80)
+            print(f"{'代码':<12} {'名称':<10} {'添加日期':<12} {'策略标签':<15} {'原因'}")
+            print("-" * 80)
+            for stock in stocks:
+                print(f"{stock['ts_code']:<12} {stock.get('name', '') or '':<10} {stock['add_date']:<12} {stock.get('strategy_tags', '') or '':<15} {stock.get('track_reason', '') or ''}")
+            print("-" * 80)
+            print(f"共 {len(stocks)} 只股票")
+
+    elif action == "info":
+        if not args.ts_code:
+            print("错误：查看股票信息需要指定股票代码")
+            return
+        stock = manager.get_stock_info(args.ts_code)
+        if args.json:
+            print(json.dumps(stock, ensure_ascii=False, indent=2) if stock else "{}")
+        else:
+            if not stock:
+                print(f"股票 {args.ts_code} 不在跟踪池中")
+                return
+            print(f"\n股票信息：{stock['ts_code']}")
+            print("-" * 40)
+            print(f"名称：{stock.get('name', '') or ''}")
+            print(f"状态：{stock['status']}")
+            print(f"添加日期：{stock['add_date']}")
+            print(f"移除日期：{stock.get('remove_date', '') or '未移除'}")
+            print(f"策略标签：{stock.get('strategy_tags', '') or ''}")
+            print(f"跟踪原因：{stock.get('track_reason', '') or ''}")
+            print(f"备注：{stock.get('notes', '') or ''}")
+
+    elif action == "status":
+        if not args.ts_code:
+            print("错误：更新状态需要指定股票代码")
+            return
+        success = manager.update_stock_status(
+            ts_code=args.ts_code,
+            status=args.status,
+            notes=args.notes
+        )
+        if args.json:
+            print(json.dumps({"success": success}, ensure_ascii=False))
+
+    elif action == "stats":
+        stats = manager.get_tracking_stats()
+        distribution = manager.get_strategy_distribution()
+        if args.json:
+            print(json.dumps({"stats": stats, "distribution": distribution}, ensure_ascii=False, indent=2))
+        else:
+            print("\n跟踪池统计")
+            print("-" * 40)
+            print(f"总数量：{stats.get('total', 0)}")
+            print(f"活跃：{stats.get('active', 0)}")
+            print(f"暂停：{stats.get('paused', 0)}")
+            print(f"已移除：{stats.get('removed', 0)}")
+            print(f"今日新增：{stats.get('today_added', 0)}")
+            if distribution:
+                print("\n策略分布：")
+                for strategy, count in sorted(distribution.items(), key=lambda x: x[1], reverse=True):
+                    print(f"  {strategy}: {count}只")
+
 def main():
     parser = argparse.ArgumentParser(
         prog="zt",
@@ -575,6 +675,19 @@ def main():
     p_sync_factor.add_argument("ts_code", nargs="?", help="股票代码（不传 = 全市场）")
     p_sync_factor.add_argument("--days", type=int, default=365, help="同步天数")
 
+    # ── track（自我改进系统 - 跟踪池管理）──
+    p_track = subparsers.add_parser("track", help="自我改进系统 - 跟踪池管理")
+    p_track.add_argument("track_action", choices=["add", "remove", "list", "info", "status", "stats"], help="操作")
+    p_track.add_argument("ts_code", nargs="?", help="股票代码")
+    p_track.add_argument("--reason", help="跟踪/移除原因")
+    p_track.add_argument("--strategy", nargs="+", help="策略标签（可多个）")
+    p_track.add_argument("--name", help="股票名称")
+    p_track.add_argument("--notes", help="备注")
+    p_track.add_argument("--status", choices=["active", "paused", "removed"], default="active", help="状态筛选")
+    p_track.add_argument("--json", action="store_true", help="JSON输出")
+
+
+
     args = parser.parse_args()
 
     # ── backtest（shaofu / multi / portfolio）──
@@ -607,7 +720,6 @@ def main():
     # ── daily ──
     p_daily = subparsers.add_parser("daily", help="每日五步工作流")
     p_daily.add_argument("--json", action="store_true", help="JSON输出")
-
     # 调度表
     from modules.cli_commands import cmd_backtest, cmd_trade, cmd_daily
 
@@ -622,6 +734,7 @@ def main():
         "backtest": cmd_backtest,
         "trade": cmd_trade,
         "daily": cmd_daily,
+        "track": cmd_track,
     }
     handlers[args.command](args)
 

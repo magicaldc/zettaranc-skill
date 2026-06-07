@@ -5,6 +5,7 @@ LLM 生成层
 支持多种 LLM 提供商，用于将 Router 组装的系统提示词转化为最终回复。
 """
 
+from typing import Optional
 import os
 import httpx
 from collections.abc import Generator
@@ -23,7 +24,7 @@ class MiniMaxProvider(LLMProvider):
     DEFAULT_BASE_URL = "https://api.minimaxi.com/v1/chat/completions"
     DEFAULT_MODEL = "MiniMax-M2.7"
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, model: str | None = None):
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None):
         # 使用通用的环境变量名称
         self.api_key = api_key or os.getenv("LLM_API_KEY", "")
         self.base_url = base_url or os.getenv("LLM_BASE_URL", self.DEFAULT_BASE_URL)

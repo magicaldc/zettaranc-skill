@@ -5,6 +5,7 @@
 六步 SOP：择时 -> 选股 -> 等 B1 -> 设止损 -> 止盈(卤煮) -> 离场(BBI两日破位)
 """
 
+from typing import Optional
 import os
 import math
 from dataclasses import dataclass, field
@@ -113,8 +114,8 @@ def _calc_metrics(result: ShaofuBacktestResult) -> None:
 def backtest_shaofu_single(
     ts_code: str,
     days: int = 250,
-    config: LoopConfig | None = None,
-    klines: list[DailyData] | None = None,
+    config: Optional[LoopConfig] = None,
+    klines: Optional[list[DailyData]] = None,
 ) -> ShaofuBacktestResult:
     """
     单股票少妇战法回测
@@ -159,7 +160,7 @@ def backtest_shaofu_single(
 def backtest_shaofu_portfolio(
     ts_codes: list[str],
     days: int = 250,
-    config: LoopConfig | None = None,
+    config: Optional[LoopConfig] = None,
     max_concurrent: int = 5,
     total_capital: float = 1_000_000,
 ) -> dict:

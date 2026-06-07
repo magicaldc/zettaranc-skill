@@ -1,3 +1,4 @@
+from typing import Optional
 from .core import StrategyType, StrategySignal, Priority, Action, _calc_kdj
 
 
@@ -6,7 +7,7 @@ def _safe_num(val, default=0):
     return val if val is not None else default
 
 
-def detect_b1(klines: list[dict], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
+def detect_b1(klines: list[dict], index: int, kirin_context: Optional[dict] = None) -> Optional[StrategySignal]:
     """
     检测 B1 买点（已升级 MDC 多维验证 + 麒麟阶段背景）
 
@@ -103,7 +104,7 @@ def detect_b1(klines: list[dict], index: int, kirin_context: dict | None = None)
     )
 
 
-def detect_b2(klines: list[dict], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
+def detect_b2(klines: list[dict], index: int, kirin_context: Optional[dict] = None) -> Optional[StrategySignal]:
     """
     检测 B2 买点（已升级 MDC 多维验证 + 麒麟阶段背景）
 
@@ -218,7 +219,7 @@ def detect_b2(klines: list[dict], index: int, kirin_context: dict | None = None)
     )
 
 
-def detect_b3(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_b3(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测 B3 中继买点
 
@@ -267,7 +268,7 @@ def detect_b3(klines: list[dict], index: int) -> StrategySignal | None:
     )
 
 
-def detect_sb1(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_sb1(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测超级B1
 

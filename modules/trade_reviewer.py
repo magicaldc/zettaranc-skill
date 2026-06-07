@@ -3,6 +3,7 @@
 只负责数据准备，不生成点评（点评由 LLM 用 Z哥角色输出）
 """
 
+from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -66,21 +67,21 @@ class ReviewContext:
     reason: str
 
     # 计算数据（买点/卖点特有）
-    avg_cost: float | None = None  # 对于卖出，计算平均成本
-    profit_pct: float | None = None  # 对于卖出，计算盈亏比例
-    holding_days: int | None = None  # 持仓天数
+    avg_cost: Optional[float] = None  # 对于卖出，计算平均成本
+    profit_pct: Optional[float] = None  # 对于卖出，计算盈亏比例
+    holding_days: Optional[int] = None  # 持仓天数
 
     # 指标数据（获取当时的）
-    indicators: dict | None = None  # 当时的技术指标
+    indicators: Optional[dict] = None  # 当时的技术指标
 
     # 对应交易
-    matched_buy: dict | None = None  # 对于卖出，找对应的买入
-    matched_sell: dict | None = None  # 对于买入，找对应的卖出
+    matched_buy: Optional[dict] = None  # 对于卖出，找对应的买入
+    matched_sell: Optional[dict] = None  # 对于买入，找对应的卖出
 
     # 元数据
     is_complete_trade: bool = False  # 是否是完整交易（有买有卖）
-    signal_type: str | None = None  # 卤煮/止损/卖飞/建仓
-    tags: list[str] | None = None
+    signal_type: Optional[str] = None  # 卤煮/止损/卖飞/建仓
+    tags: Optional[list[str]] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -162,7 +163,7 @@ class TradeReviewer:
     def __init__(self):
         self.parser = TradeParser()
 
-    def parse_input(self, text: str) -> tuple[ParseResult, dict | None]:
+    def parse_input(self, text: str) -> tuple[ParseResult, Optional[dict]]:
         """
         解析用户输入
         Returns: (解析结果, 状态数据)
@@ -171,7 +172,7 @@ class TradeReviewer:
         return result, result.data
 
     def prepare_review_context(
-        self, data: dict, action_type: str | None = None, extra_info: dict | None = None
+        self, data: dict, action_type: Optional[str] = None, extra_info: Optional[dict] = None
     ) -> ReviewContext:
         """
         准备点评上下文

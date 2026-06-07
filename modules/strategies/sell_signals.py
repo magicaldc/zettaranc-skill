@@ -1,8 +1,9 @@
+from typing import Optional
 from .core import StrategyType, StrategySignal, Priority, _klines_dict_to_daily
 from ..indicators import detect_four_brick_system
 
 
-def detect_s1(klines: list[dict], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
+def detect_s1(klines: list[dict], index: int, kirin_context: Optional[dict] = None) -> Optional[StrategySignal]:
     """
     检测 S1 初级逃顶信号（已升级 MDC 验证 + 麒麟阶段背景）
 
@@ -110,7 +111,7 @@ def _calc_dif(klines: list[dict]) -> list[float]:
     return dif
 
 
-def detect_s2(klines: list[dict], index: int, dif_list: list[float] | None = None) -> StrategySignal | None:
+def detect_s2(klines: Optional[list[dict]], index: int, dif_list: list[float]) -> Optional[StrategySignal]:
     """
     检测 S2 确认逃顶信号（MACD顶背离）
 
@@ -165,7 +166,7 @@ def detect_s2(klines: list[dict], index: int, dif_list: list[float] | None = Non
     return None
 
 
-def detect_s3(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_s3(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测 S3 最后逃生信号（简化版）
 
@@ -222,7 +223,7 @@ def detect_s3(klines: list[dict], index: int) -> StrategySignal | None:
     )
 
 
-def detect_brick_signals(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_brick_signals(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测砖形图信号
 
@@ -286,7 +287,7 @@ def detect_brick_signals(klines: list[dict], index: int) -> StrategySignal | Non
     )
 
 
-def detect_buy_exhaustion(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_buy_exhaustion(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测买盘枯竭信号（上涨动能耗尽预警）
 
@@ -346,7 +347,7 @@ def detect_buy_exhaustion(klines: list[dict], index: int) -> StrategySignal | No
     )
 
 
-def detect_green_fat_red_thin(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_green_fat_red_thin(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测绿肥红瘦出货信号（主力出货）
 
@@ -404,7 +405,7 @@ def detect_green_fat_red_thin(klines: list[dict], index: int) -> StrategySignal 
     )
 
 
-def detect_staircase_distribution(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_staircase_distribution(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测阶梯放量下跌信号（阶梯式出货）
 
@@ -447,7 +448,7 @@ def detect_staircase_distribution(klines: list[dict], index: int) -> StrategySig
     )
 
 
-def detect_top_pinwheel(klines: list[dict], index: int) -> StrategySignal | None:
+def detect_top_pinwheel(klines: list[dict], index: int) -> Optional[StrategySignal]:
     """
     检测顶部大风车信号（S1 具体形态）
 

@@ -8,6 +8,7 @@ Tushare 中转 API 客户端
 import os
 import time
 import logging
+from typing import Optional
 
 try:
     import requests  # noqa: F401  可用性检查
@@ -40,7 +41,7 @@ class TushareClient:
     - get_trade_cal: 交易日历
     """
 
-    def __init__(self, token: str | None = None):
+    def __init__(self, token: Optional[str] = None):
         self.token = token or TUSHARE_TOKEN
         data_mode = os.getenv("DATA_MODE", "websearch")
 
@@ -79,7 +80,7 @@ class TushareClient:
             time.sleep(self.min_request_interval - elapsed)
         self.last_request_time = time.time()
 
-    def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_daily(self, ts_code: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """获取日线行情（个股，前复权）"""
         self._rate_limit()
         try:
@@ -94,7 +95,7 @@ class TushareClient:
             logger.error(f"get_daily 失败: {e}")
             return pd.DataFrame()
 
-    def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """获取指数日线（如沪深300）"""
         self._rate_limit()
         try:
@@ -103,7 +104,7 @@ class TushareClient:
             logger.error(f"get_index_daily 失败: {e}")
             return pd.DataFrame()
 
-    def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
+    def get_realtime_quote(self, ts_codes: list[str]) -> Optional[pd.DataFrame]:
         """获取 A 股实时行情"""
         self._rate_limit()
         try:
@@ -113,7 +114,7 @@ class TushareClient:
             logger.error(f"get_realtime_quote 失败: {e}")
             return pd.DataFrame()
 
-    def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
+    def get_moneyflow(self, ts_code: str, trade_date: str) -> Optional[pd.DataFrame]:
         """获取个股资金流向"""
         self._rate_limit()
         try:
@@ -122,7 +123,7 @@ class TushareClient:
             logger.error(f"get_moneyflow 失败: {e}")
             return pd.DataFrame()
 
-    def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
+    def get_stock_basic(self, ts_code: Optional[str] = None, name: Optional[str] = None) -> Optional[pd.DataFrame]:
         """获取股票基本信息"""
         self._rate_limit()
         try:
@@ -136,7 +137,7 @@ class TushareClient:
             logger.error(f"get_stock_basic 失败: {e}")
             return pd.DataFrame()
 
-    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+    def get_limit_list(self, trade_date: str) -> Optional[pd.DataFrame]:
         """获取涨跌停列表"""
         self._rate_limit()
         try:
@@ -145,7 +146,7 @@ class TushareClient:
             logger.error(f"get_limit_list 失败: {e}")
             return pd.DataFrame()
 
-    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+    def get_top_list(self, trade_date: str) -> Optional[pd.DataFrame]:
         """获取龙虎榜数据"""
         self._rate_limit()
         try:
@@ -154,7 +155,7 @@ class TushareClient:
             logger.error(f"get_top_list 失败: {e}")
             return pd.DataFrame()
 
-    def get_financial_data(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_financial_data(self, ts_code: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """获取财务指标"""
         self._rate_limit()
         try:
@@ -163,7 +164,7 @@ class TushareClient:
             logger.error(f"get_financial_data 失败: {e}")
             return pd.DataFrame()
 
-    def get_trade_cal(self, exchange: str = "SSE", start_date: str = "", end_date: str = "") -> pd.DataFrame | None:
+    def get_trade_cal(self, exchange: str = "SSE", start_date: str = "", end_date: str = "") -> Optional[pd.DataFrame]:
         """获取交易日历"""
         self._rate_limit()
         try:
