@@ -496,7 +496,6 @@ def cmd_sync(args):
                 print(f"  {s['data_type']}: {s.get('last_date', 'N/A')} ({s.get('status', 'N/A')})")
 
 
-
 def cmd_track(args):
     """跟踪池管理（add / remove / list / info / status / stats）"""
     from modules.tracking_manager import TrackingManager
@@ -511,11 +510,7 @@ def cmd_track(args):
             print("错误：添加股票需要指定股票代码")
             return
         success = manager.add_stock(
-            ts_code=args.ts_code,
-            name=args.name,
-            reason=args.reason,
-            strategy_tags=args.strategy,
-            notes=args.notes
+            ts_code=args.ts_code, name=args.name, reason=args.reason, strategy_tags=args.strategy, notes=args.notes
         )
         if args.json:
             print(json.dumps({"success": success}, ensure_ascii=False))
@@ -541,7 +536,9 @@ def cmd_track(args):
             print(f"{'代码':<12} {'名称':<10} {'添加日期':<12} {'策略标签':<15} {'原因'}")
             print("-" * 80)
             for stock in stocks:
-                print(f"{stock['ts_code']:<12} {stock.get('name', '') or '':<10} {stock['add_date']:<12} {stock.get('strategy_tags', '') or '':<15} {stock.get('track_reason', '') or ''}")
+                print(
+                    f"{stock['ts_code']:<12} {stock.get('name', '') or '':<10} {stock['add_date']:<12} {stock.get('strategy_tags', '') or '':<15} {stock.get('track_reason', '') or ''}"
+                )
             print("-" * 80)
             print(f"共 {len(stocks)} 只股票")
 
@@ -570,11 +567,7 @@ def cmd_track(args):
         if not args.ts_code:
             print("错误：更新状态需要指定股票代码")
             return
-        success = manager.update_stock_status(
-            ts_code=args.ts_code,
-            status=args.status,
-            notes=args.notes
-        )
+        success = manager.update_stock_status(ts_code=args.ts_code, status=args.status, notes=args.notes)
         if args.json:
             print(json.dumps({"success": success}, ensure_ascii=False))
 
@@ -595,6 +588,7 @@ def cmd_track(args):
                 print("\n策略分布：")
                 for strategy, count in sorted(distribution.items(), key=lambda x: x[1], reverse=True):
                     print(f"  {strategy}: {count}只")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -685,8 +679,6 @@ def main():
     p_track.add_argument("--notes", help="备注")
     p_track.add_argument("--status", choices=["active", "paused", "removed"], default="active", help="状态筛选")
     p_track.add_argument("--json", action="store_true", help="JSON输出")
-
-
 
     args = parser.parse_args()
 
