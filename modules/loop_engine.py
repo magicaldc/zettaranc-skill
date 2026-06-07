@@ -3,7 +3,13 @@
 少妇战法六步闭环引擎
 
 状态机驱动的交易循环，严格遵循 Z 哥 SOP 六步流程：
-  1. 择时 → 2. 选股 → 3. 等B1 → 4. 设止损 → 5. 卤煮止盈 → 6. BBI两日破位离场
+  1. 择时 → 2. 选股 → 3. 等B1 → 4. 设止损 → 5. 卤煮止盈 → 6. 白线两日破位离场
+
+核心趋势线：
+  - 白线（Z哥白线）= EMA(EMA(C,10),10) — 短期趋势支撑，"牵牛绳"
+  - 黄线（大哥线）= (MA14+MA28+MA57+MA114)/4 — 中期趋势
+  - 白线在黄线上 = 主力牵牛，任何下跌都是洗盘
+  - 白线死叉黄线 = 无条件清仓
 
 用法：
     from modules.loop_engine import ShaofuLoopEngine, LoopConfig
@@ -22,7 +28,10 @@ from .indicators import (
     TradeSignal,
     calculate_bbi,
     calculate_kdj,
+    calculate_zg_white,
+    calculate_dg_yellow,
     detect_b1_today,
+    detect_double_line_cross,
     detect_trade_signal,
 )
 
@@ -73,7 +82,7 @@ class LoopTrade:
     stop_loss_price: float  # Step 4: 收盘价止损位
     exit_date: str = ""
     exit_price: float = 0
-    exit_reason: str = ""  # "卤煮止盈" | "BBI跌破" | "止损" | "S1/S2/S3"
+    exit_reason: str = ""  # "卤煮止盈" | "白线跌破" | "止损" | "白线死叉黄线"
     pnl_pct: float = 0
     holding_days: int = 0
     max_favorable: float = 0  # 最大浮盈%
@@ -174,8 +183,8 @@ class ShaofuLoopEngine:
     - B1 入场检测（含 J 值阈值、N 型上移、缩量回调、MACD 否决）
     - 收盘价止损
     - 卤煮减半止盈
-    - BBI 两日破位离场
-    - S1/S2/S3 紧急离场
+    - 白线两日破位离场
+    - 白线死叉黄线紧急离场
 
     设计原则：
     - Python 层只做数据判断，不生成话术
@@ -226,6 +235,12 @@ class ShaofuLoopEngine:
         if j_val > self.config.j_threshold:
             return None
 
+        # --- 牛绳检查：白线在黄线上才入场 ---
+        white = calculate_zg_white(klines)
+        yellow = calculate_dg_yellow(klines)
+        if white < yellow:
+            return None
+
         # --- 缩量回调 ---
         today = klines[-1]
         yesterday = klines[-2]
@@ -234,7 +249,7 @@ class ShaofuLoopEngine:
         # --- N 型上移结构 ---
         n_structure_ok = self._check_n_structure(klines, len(klines) - 1)
 
-        # 综合判定：B1 通过 + 缩量 + N型结构 OK
+        # 综合判定：B1 通过 + 牛绳牵牛 + 缩量 + N型结构 OK
         if b1["is_b1"] and vol_shrink and n_structure_ok:
             reason_parts = [
                 f"J={j_val:.1f}",
@@ -273,18 +288,18 @@ class ShaofuLoopEngine:
         return current.close < entry_low
 
     def check_lu_zhu(
-        self, recent_klines: list[DailyData], bbi: float
+        self, recent_klines: list[DailyData], white_line: float
     ) -> bool:
         """
         Step 5: 检查卤煮止盈条件（公开接口）
 
-        SOP: 站上 BBI + 连续两根中/大阳线 → 减半
+        SOP: 站上白线 + 连续两根中/大阳线 → 减半
         阳线定义：close > open
         额外条件：成交量不能明显萎缩
 
         Args:
             recent_klines: 最近的 K 线列表（至少 2 根）
-            bbi: 当前 BBI 值
+            white_line: 当前白线值
 
         Returns:
             是否触发卤煮止盈
@@ -295,8 +310,8 @@ class ShaofuLoopEngine:
         today = recent_klines[-1]
         yesterday = recent_klines[-2]
 
-        # 条件 1: 当日站上 BBI
-        if today.close <= bbi:
+        # 条件 1: 当日站上白线
+        if today.close <= white_line:
             return False
 
         # 条件 2: 连续两根阳线（close >= open，含十字星）
@@ -312,23 +327,24 @@ class ShaofuLoopEngine:
 
         return True
 
-    def check_bbi_exit(
-        self, closes: list[float], bbi_values: list[float]
+    def check_white_line_exit(
+        self, closes: list[float], white_values: list[float]
     ) -> bool:
         """
-        Step 6: 检查 BBI 两日破位（公开接口）
+        Step 6: 检查白线两日破位（公开接口）
 
-        SOP: 收盘价连续两天跌破 BBI → 清仓
+        SOP: 收盘价连续两天跌破白线 → 清仓
+        白线 = EMA(EMA(C,10),10)，是 Z 哥的"牵牛绳"
 
         Args:
             closes: 最近 N 天的收盘价列表
-            bbi_values: 最近 N 天的 BBI 值列表
+            white_values: 最近 N 天的白线值列表
 
         Returns:
-            是否触发 BBI 两日破位离场
+            是否触发白线两日破位离场
         """
         return detect_bbi_break_streak(
-            closes, bbi_values, self.config.bbi_break_days, self.config.bbi_break_threshold
+            closes, white_values, self.config.bbi_break_days, self.config.bbi_break_threshold
         )
 
     # ----------------------------------------------------------
@@ -390,65 +406,60 @@ class ShaofuLoopEngine:
         if len(sub) < 24:
             return False
 
-        bbi = calculate_bbi(sub)
-        return self.check_lu_zhu(sub[-3:], bbi)
+        white = calculate_zg_white(sub)
+        return self.check_lu_zhu(sub[-3:], white)
 
-    def _check_bbi_exit_internal(
+    def _check_white_line_exit_internal(
         self, klines: list[DailyData], day_idx: int
     ) -> bool:
         """
-        内部 BBI 破位检查
+        内部白线破位检查
 
         Args:
             klines: K 线数据
             day_idx: 当前日索引
 
         Returns:
-            是否触发 BBI 两日破位离场
+            是否触发白线两日破位离场
         """
         days_needed = self.config.bbi_break_days
         if day_idx < days_needed:
             return False
 
-        # 逐天计算 BBI 并检查
+        # 逐天计算白线并检查
         closes = []
-        bbi_values = []
+        white_values = []
         for i in range(day_idx - days_needed + 1, day_idx + 1):
             sub = klines[: i + 1]
-            if len(sub) < 24:
+            if len(sub) < 10:
                 return False
             closes.append(sub[-1].close)
-            bbi_values.append(calculate_bbi(sub))
+            white_values.append(calculate_zg_white(sub))
 
-        return self.check_bbi_exit(closes, bbi_values)
+        return self.check_white_line_exit(closes, white_values)
 
-    def _check_s_exit(
+    def _check_dead_cross_exit(
         self, klines: list[DailyData], day_idx: int
     ) -> bool:
         """
-        检查 S1/S2/S3 紧急离场信号
+        检查白线死叉黄线（紧急离场）
 
-        使用 detect_trade_signal() 获取信号类型，
-        S1/S2/S3 均触发离场。
-
-        信号含义：
-        - S1: 放量阴线 / 顶部形态（最高优先级卖出）
-        - S2: MACD 顶背离
-        - S3: 其他卖出信号
+        SOP: 白线死叉黄线 = 无条件清仓
+        "白线在黄线上 = 主力牵着牛绳（洗盘），白线在黄线下 = 牛绳断了（反弹）"
 
         Args:
             klines: K 线数据
             day_idx: 当前日索引
 
         Returns:
-            是否触发 S 信号离场
+            是否触发白线死叉黄线离场
         """
         sub = klines[: day_idx + 1]
-        if len(sub) < 30:
+        if len(sub) < 20:
             return False
 
-        signal = detect_trade_signal(sub)
-        return signal in (TradeSignal.S1, TradeSignal.S2)
+        is_gold, is_dead = detect_double_line_cross(sub)
+        return is_dead
 
     def _check_n_structure(
         self, klines: list[DailyData], day_idx: int
@@ -563,11 +574,11 @@ class ShaofuLoopEngine:
                     current_trade = None
                     continue
 
-                # 紧急离场：S1/S2/S3（始终检查）
-                if self._check_s_exit(klines, day_idx):
+                # 紧急离场：白线死叉黄线（无条件清仓，始终检查）
+                if self._check_dead_cross_exit(klines, day_idx):
                     current_trade.exit_date = klines[day_idx].trade_date
                     current_trade.exit_price = current_price
-                    current_trade.exit_reason = "S1/S2/S3"
+                    current_trade.exit_reason = "白线死叉黄线"
                     current_trade.pnl_pct = pnl_pct
                     completed_trades.append(current_trade)
                     current_trade = None
@@ -577,11 +588,11 @@ class ShaofuLoopEngine:
                 if current_trade.holding_days < self.config.min_holding_days:
                     continue
 
-                # Step 6: BBI 两日破位（全仓离场）
-                if self._check_bbi_exit_internal(klines, day_idx):
+                # Step 6: 白线两日破位（全仓离场）
+                if self._check_white_line_exit_internal(klines, day_idx):
                     current_trade.exit_date = klines[day_idx].trade_date
                     current_trade.exit_price = current_price
-                    current_trade.exit_reason = "BBI跌破"
+                    current_trade.exit_reason = "白线跌破"
                     current_trade.pnl_pct = pnl_pct
                     completed_trades.append(current_trade)
                     current_trade = None
@@ -687,19 +698,19 @@ class ShaofuLoopEngine:
             current_trade.pnl_pct = pnl_pct
             return None, current_trade
 
-        # S1/S2/S3
-        if self._check_s_exit(klines, day_idx):
+        # 白线死叉黄线（无条件清仓）
+        if self._check_dead_cross_exit(klines, day_idx):
             current_trade.exit_date = klines[day_idx].trade_date
             current_trade.exit_price = current_price
-            current_trade.exit_reason = "S1/S2/S3"
+            current_trade.exit_reason = "白线死叉黄线"
             current_trade.pnl_pct = pnl_pct
             return None, current_trade
 
-        # Step 6: BBI 两日破位
-        if self._check_bbi_exit_internal(klines, day_idx):
+        # Step 6: 白线两日破位
+        if self._check_white_line_exit_internal(klines, day_idx):
             current_trade.exit_date = klines[day_idx].trade_date
             current_trade.exit_price = current_price
-            current_trade.exit_reason = "BBI跌破"
+            current_trade.exit_reason = "白线跌破"
             current_trade.pnl_pct = pnl_pct
             return None, current_trade
 
