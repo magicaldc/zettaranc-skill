@@ -31,6 +31,7 @@ from .sell_signals import (
     detect_buy_exhaustion,
     detect_green_fat_red_thin,
     detect_staircase_distribution,
+    detect_top_pinwheel,
     _calc_dif,
 )
 from .kirin import analyze_kirin_phase  # noqa: F401  re-export
@@ -249,6 +250,11 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
 
             # 阶梯放量下跌
             signal = detect_staircase_distribution(klines, i)
+            if signal:
+                signals.append(signal)
+
+            # 顶部大风车
+            signal = detect_top_pinwheel(klines, i)
             if signal:
                 signals.append(signal)
 

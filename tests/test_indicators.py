@@ -47,6 +47,8 @@ from modules.indicators import (
     detect_zaihou_chongjian,
     detect_yueyueyushi,
     detect_key_candle,
+    detect_key_candle_coverage,
+    detect_abc_stages,
     detect_centipede_pattern,
     detect_volume_ratio_strategy,
     detect_bull_rope,
@@ -1191,3 +1193,175 @@ class TestSandglassScore:
         for key in ("缩量收敛", "枢轴邻近", "量能斜率", "均线结构", "事件风险"):
             assert key in result["factors"]
             assert 0 <= result["factors"][key] <= 20
+
+
+# ========== detect_key_candle_coverage ==========
+
+
+class TestKeyCandleCoverage:
+    def test_insufficient_data(self):
+        """数据不足20根时返回默认值"""
+        klines = make_klines(n=10, base_price=100.0, base_vol=10000.0)
+        result = detect_key_candle_coverage(klines)
+        assert result["has_key_candle"] is False
+        assert result["key_date"] == ""
+        assert result["in_range"] is False
+
+    def test_no_key_candle_in_20_days(self):
+        """20天内没有关键K（小实体、量能平稳）"""
+        klines = make_klines(n=30, base_price=100.0, base_vol=10000.0, daily_pct=0.1)
+        result = detect_key_candle_coverage(klines)
+        # 小实体、平稳量能不应识别为关键K
+        assert result["has_key_candle"] is False
+
+    def test_has_key_candle_in_range(self):
+        """有关键K且当前价在上下沿之间"""
+        klines = make_klines(n=25, base_price=100.0, base_vol=10000.0, daily_pct=0.0)
+        # 在第15天制造一根关键阳线：大实体 + 放量 + 突破前高
+        klines[14].open = 100.0
+        klines[14].close = 106.0
+        klines[14].high = 107.0
+        klines[14].low = 99.0
+        klines[14].vol = 30000.0  # 放量
+
+        # 当前价在上下沿之间
+        klines[-1].close = 103.0
+        klines[-1].high = 104.0
+        klines[-1].low = 102.0
+
+        result = detect_key_candle_coverage(klines)
+        assert result["has_key_candle"] is True
+        assert result["key_high"] == 107.0
+        assert result["key_low"] == 99.0
+        assert result["in_range"] is True
+
+    def test_buy_point_at_mid(self):
+        """当前价在关键K一半位置时 buy_point 为 True"""
+        klines = make_klines(n=25, base_price=100.0, base_vol=10000.0, daily_pct=0.0)
+        # 第15天关键阳线
+        klines[14].open = 100.0
+        klines[14].close = 110.0
+        klines[14].high = 112.0
+        klines[14].low = 98.0
+        klines[14].vol = 30000.0
+
+        # 当前价在一半位置：(112+98)/2 = 105
+        klines[-1].close = 105.0
+        klines[-1].high = 106.0
+        klines[-1].low = 104.0
+
+        result = detect_key_candle_coverage(klines)
+        assert result["has_key_candle"] is True
+        assert result["in_range"] is True
+        assert result["buy_point"] is True
+
+    def test_current_price_outside_range(self):
+        """当前价不在关键K上下沿之间时 in_range 为 False"""
+        klines = make_klines(n=25, base_price=100.0, base_vol=10000.0, daily_pct=0.0)
+        # 第15天关键阳线
+        klines[14].open = 100.0
+        klines[14].close = 106.0
+        klines[14].high = 107.0
+        klines[14].low = 99.0
+        klines[14].vol = 30000.0
+
+        # 当前价远高于关键K上沿
+        klines[-1].close = 120.0
+        klines[-1].high = 121.0
+        klines[-1].low = 119.0
+
+        result = detect_key_candle_coverage(klines)
+        assert result["has_key_candle"] is True
+        assert result["in_range"] is False
+
+    def test_volume_shrinking_after_key(self):
+        """关键K之后量能递减时 volume_shrinking 为 True"""
+        klines = make_klines(n=25, base_price=100.0, base_vol=10000.0, daily_pct=0.0)
+        # 第15天关键阳线
+        klines[14].open = 100.0
+        klines[14].close = 106.0
+        klines[14].high = 107.0
+        klines[14].low = 99.0
+        klines[14].vol = 30000.0
+
+        # 关键K之后量能递减
+        for i in range(15, 25):
+            klines[i].vol = 20000.0 - (i - 15) * 1500
+
+        result = detect_key_candle_coverage(klines)
+        assert result["has_key_candle"] is True
+        assert result["volume_shrinking"] is True
+
+
+# ========== detect_abc_stages ==========
+
+
+class TestAbcStages:
+    def test_insufficient_data(self):
+        """数据不足30根时返回未知"""
+        klines = make_klines(n=20, base_price=100.0, base_vol=10000.0)
+        result = detect_abc_stages(klines)
+        assert result["stage"] == "未知"
+        assert result["a_score"] == 0.0
+        assert result["action"] == "观察"
+
+    def test_stage_a_j_recovery(self):
+        """A阶段：J值回升 + 缩量横盘"""
+        # 先下跌让J值到负值
+        klines = []
+        price = 120.0
+        for i in range(25):
+            prev = price
+            price *= 0.97  # 连续下跌
+            klines.append(make_kline(
+                price=price,
+                vol=8000.0 - i * 100,
+                prev_close=prev,
+                date=f"2026{i // 28 + 1:02d}{i % 28 + 1:02d}",
+            ))
+
+        # 最后5天缩量横盘 + 小幅回升
+        for i in range(25, 35):
+            klines.append(make_kline(
+                price=price * (1 + (i - 25) * 0.001),
+                vol=3000.0,  # 缩量
+                prev_close=price,
+                date=f"2026{i // 28 + 1:02d}{i % 28 + 1:02d}",
+            ))
+
+        result = detect_abc_stages(klines)
+        assert result["a_score"] > 0
+        assert "stage" in result
+        assert "confidence" in result
+        assert result["action"] in ("观察", "试水", "重仓", "突破")
+
+    def test_stage_c_breakout(self):
+        """C阶段：放量突破近期高点"""
+        klines = make_klines(n=30, base_price=100.0, base_vol=10000.0, daily_pct=0.2)
+
+        # 最后一天放量大涨突破
+        klines[-1].close = 110.0
+        klines[-1].high = 111.0
+        klines[-1].low = 105.0
+        klines[-1].open = 104.0
+        klines[-1].vol = 50000.0
+        klines[-1].pct_chg = 5.0
+
+        result = detect_abc_stages(klines)
+        assert result["c_score"] > 0
+
+    def test_return_structure(self):
+        """验证返回结构完整性"""
+        klines = make_klines(n=35, base_price=100.0, base_vol=10000.0)
+        result = detect_abc_stages(klines)
+        assert "stage" in result
+        assert "a_score" in result
+        assert "b_score" in result
+        assert "c_score" in result
+        assert "confidence" in result
+        assert "action" in result
+        assert result["stage"] in ("A", "B", "C", "未知")
+        assert result["action"] in ("观察", "试水", "重仓", "突破")
+        assert 0 <= result["a_score"] <= 100
+        assert 0 <= result["b_score"] <= 100
+        assert 0 <= result["c_score"] <= 100

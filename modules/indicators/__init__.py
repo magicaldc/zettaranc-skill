@@ -51,6 +51,8 @@ from .price_patterns import (
     detect_zaihou_chongjian,
     detect_yueyueyushi,
     detect_key_candle,
+    detect_key_candle_coverage,
+    detect_abc_stages,
     detect_b1_today,
     detect_b2_today,
     detect_key_k,
@@ -161,6 +163,8 @@ __all__ = [
     "detect_zaihou_chongjian",
     "detect_yueyueyushi",
     "detect_key_candle",
+    "detect_key_candle_coverage",
+    "detect_abc_stages",
     "detect_chuhuo_wushi",
     # wave theory
     "detect_three_waves",

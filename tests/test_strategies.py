@@ -30,6 +30,7 @@ from modules.strategies import (
     detect_buy_exhaustion,
     detect_green_fat_red_thin,
     detect_staircase_distribution,
+    detect_top_pinwheel,
 )
 from modules.indicators import detect_volume_attack, DailyData
 from datetime import datetime, timedelta
@@ -936,3 +937,68 @@ class TestDetectVolumeAttack:
 
         result = detect_volume_attack(klines)
         assert result["is_attack"] is False
+
+
+# ========== detect_top_pinwheel ==========
+
+
+class TestDetectTopPinwheel:
+    def test_positive_high_pinwheel(self):
+        """高位大风车：长上下影阴线，应触发 S1"""
+        klines = generate_uptrend_klines(n=25, start_price=100.0, daily_pct=0.5)
+        # 最后一天在高位，制造大风车形态
+        recent_high = max(k["high"] for k in klines[-20:])
+        # 阴线，实体=0.01，上下影线 > 实体×2
+        klines[-1]["open"] = recent_high * 0.985
+        klines[-1]["close"] = recent_high * 0.975  # 阴线
+        klines[-1]["high"] = recent_high * 1.02    # 长上影线
+        klines[-1]["low"] = recent_high * 0.95     # 长下影线
+
+        signal = detect_top_pinwheel(klines, len(klines) - 1)
+        assert signal is not None
+        assert signal.strategy == StrategyType.S1
+        assert signal.action == "SELL"
+        assert signal.priority == Priority.CRITICAL
+        assert "大风车" in signal.description
+
+    def test_negative_not_high(self):
+        """非高位不应触发"""
+        klines = generate_uptrend_klines(n=25, start_price=100.0, daily_pct=2.0)
+        recent_high = max(k["high"] for k in klines[-20:])
+        klines[-1]["close"] = recent_high * 0.80  # 远低于高点
+        klines[-1]["open"] = recent_high * 0.81
+        klines[-1]["high"] = recent_high * 0.85
+        klines[-1]["low"] = recent_high * 0.75
+
+        signal = detect_top_pinwheel(klines, len(klines) - 1)
+        assert signal is None
+
+    def test_negative_not_yinxian(self):
+        """阳线不应触发"""
+        klines = generate_uptrend_klines(n=25, start_price=100.0, daily_pct=0.5)
+        recent_high = max(k["high"] for k in klines[-20:])
+        klines[-1]["open"] = recent_high * 0.97
+        klines[-1]["close"] = recent_high * 0.99  # 阳线
+        klines[-1]["high"] = recent_high * 1.02
+        klines[-1]["low"] = recent_high * 0.95
+
+        signal = detect_top_pinwheel(klines, len(klines) - 1)
+        assert signal is None
+
+    def test_negative_short_shadows(self):
+        """上下影线不够长不应触发"""
+        klines = generate_uptrend_klines(n=25, start_price=100.0, daily_pct=0.5)
+        recent_high = max(k["high"] for k in klines[-20:])
+        klines[-1]["open"] = recent_high * 0.99
+        klines[-1]["close"] = recent_high * 0.97  # 阴线，实体=0.02
+        klines[-1]["high"] = recent_high * 0.995   # 上影=0.005，太短
+        klines[-1]["low"] = recent_high * 0.96     # 下影=0.01，太短
+
+        signal = detect_top_pinwheel(klines, len(klines) - 1)
+        assert signal is None
+
+    def test_insufficient_data(self):
+        """数据不足20根"""
+        klines = generate_uptrend_klines(n=10, start_price=100.0, daily_pct=0.5)
+        signal = detect_top_pinwheel(klines, 9)
+        assert signal is None

@@ -445,3 +445,70 @@ def detect_staircase_distribution(klines: list[dict], index: int) -> StrategySig
         action="SELL",
         priority=Priority.CRITICAL,
     )
+
+
+def detect_top_pinwheel(klines: list[dict], index: int) -> StrategySignal | None:
+    """
+    检测顶部大风车信号（S1 具体形态）
+
+    来源：knowledge/exit-strategies.md
+
+    触发条件：
+    1. 在高位（近20天最高价附近，距高点<5%）
+    2. 出现长上下影线 + 真阴线
+    3. 上影线 > 实体×2 且 下影线 > 实体×2
+    4. 阴线：close < open
+
+    Args:
+        klines: K线数据（dict格式）
+        index: 当前K线索引
+
+    Returns:
+        StrategySignal 或 None
+    """
+    if index < 20:
+        return None
+
+    today = klines[index]
+
+    # 1. 高位判断：当前价在近20天最高价附近（距高点<5%）
+    recent_high = max(k["high"] for k in klines[index - 19:index + 1])
+    if today["close"] < recent_high * 0.95:
+        return None
+
+    # 2. 阴线判断：close < open
+    if today["close"] >= today["open"]:
+        return None
+
+    # 3. 实体大小
+    body = today["open"] - today["close"]  # 阴线，open > close
+
+    # 4. 上下影线
+    upper_shadow = today["high"] - today["open"]
+    lower_shadow = today["close"] - today["low"]
+
+    if body <= 0:
+        return None
+
+    # 5. 上影线 > 实体×2 且 下影线 > 实体×2
+    if upper_shadow < body * 2 or lower_shadow < body * 2:
+        return None
+
+    return StrategySignal(
+        ts_code=today["ts_code"],
+        trade_date=today["trade_date"],
+        strategy=StrategyType.S1,
+        confidence=0.85,
+        description="顶部大风车：高位长上下影阴线，S1形态",
+        details={
+            "recent_high": round(recent_high, 2),
+            "body": round(body, 2),
+            "upper_shadow": round(upper_shadow, 2),
+            "lower_shadow": round(lower_shadow, 2),
+            "upper_body_ratio": round(upper_shadow / body, 2),
+            "lower_body_ratio": round(lower_shadow / body, 2),
+        },
+        action="SELL",
+        stop_loss=today["high"],
+        priority=Priority.CRITICAL,
+    )
