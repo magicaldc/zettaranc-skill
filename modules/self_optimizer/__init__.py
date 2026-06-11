@@ -6,19 +6,22 @@ V1 dry-run mode: 集成 ratchet + reflex_blacklist + break_signal,
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from modules.self_optimizer.phase1_baseline import phase1_baseline
-from modules.self_optimizer.phase2_hillclimb import (
-    RoundResult,
-    check_break_signal,
-    run_round,
-)
-from modules.self_optimizer.phase3_report import (
-    append_improvement_log,
-    write_optimization_draft,
-    write_results_tsv,
-)
+# 后续 Task 模块在 __init__ 时不强制导入, 避免子模块未实现时阻塞整包.
+# 仍可在 `from modules.self_optimizer import X` 顶层导出 (如下 __all__).
+if TYPE_CHECKING:  # pragma: no cover - 仅类型检查
+    from modules.self_optimizer.phase1_baseline import phase1_baseline
+    from modules.self_optimizer.phase2_hillclimb import (
+        RoundResult,
+        check_break_signal,
+        run_round,
+    )
+    from modules.self_optimizer.phase3_report import (
+        append_improvement_log,
+        write_optimization_draft,
+        write_results_tsv,
+    )
 
 
 class SelfOptimizer:
@@ -57,6 +60,8 @@ class SelfOptimizer:
 
     def run(self) -> dict:
         """Phase 1 → 2 → 3 完整跑一次."""
+        from modules.self_optimizer.phase2_hillclimb import RoundResult, run_round
+
         baseline = self.phase1_baseline()
         history: list[RoundResult] = []
         for n in range(1, self.rounds + 1):
@@ -73,10 +78,18 @@ class SelfOptimizer:
         return self.phase3_report(history)
 
     def phase1_baseline(self) -> float:
+        from modules.self_optimizer.phase1_baseline import phase1_baseline
+
         return phase1_baseline(target=self.target, review_months=self.review_months)
 
     def phase3_report(self, history: list[RoundResult]) -> dict:
         from datetime import datetime
+
+        from modules.self_optimizer.phase3_report import (
+            append_improvement_log,
+            write_optimization_draft,
+            write_results_tsv,
+        )
 
         run_id = datetime.now().strftime("%Y-%m-%d-r%H%M%S")
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -98,6 +111,4 @@ class SelfOptimizer:
 
 __all__ = [
     "SelfOptimizer",
-    "RoundResult",
-    "check_break_signal",
 ]
