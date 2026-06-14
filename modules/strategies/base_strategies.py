@@ -1,6 +1,7 @@
 from typing import Optional
 from ..indicators import DailyData
 from .core import StrategyType, StrategySignal, Priority, Action, _get_kdj, _get_bbi, _ensure_daily_klines
+from modules.self_optimizer.param_registry import get_active_param
 
 
 def _safe_num(val, default=0):
@@ -34,14 +35,16 @@ def detect_b1(klines: list[DailyData], index: int, kirin_context: dict | None = 
 
     k, d, j = _get_kdj(klines, index)
 
-    # 1. 核心条件判断
-    if j >= -10:
+    # 1. 核心条件判断（参数可被 self-optimizer 覆盖）
+    j_threshold = get_active_param("b1", "j_threshold", -10)
+    if j >= j_threshold:  # J 必须低于 threshold（默认 -10）
         return None
 
     # 检查是否在连续下跌中（绿砖状态）
     recent_4 = klines[index - 3 : index + 1]
     yin_count = sum(1 for k in recent_4 if k.is_yinxian)
-    if yin_count >= 4:  # 强力绿砖，不建议入场
+    green_brick_limit = get_active_param("b1", "green_brick_limit", 4)
+    if yin_count >= green_brick_limit:
         return None
 
     # 2. 基础置信度
@@ -76,15 +79,17 @@ def detect_b1(klines: list[DailyData], index: int, kirin_context: dict | None = 
         confidence += 0.10
         mdc_details.append("主力大单净流入")
 
-    # 6. MDC 验证 - RSI (极端超卖)
+    # 6. MDC 验证 - RSI (极端超卖，参数可被覆盖)
+    rsi6_ceiling = get_active_param("b1", "rsi6_ceiling", 25)
     rsi6 = getattr(today, "rsi6", None)
-    if (rsi6 or 50) < 25:
+    if (rsi6 or 50) < rsi6_ceiling:
         confidence += 0.05
         mdc_details.append("RSI极端超卖")
 
-    # 7. MDC 验证 - DMI (趋势动能)
+    # 7. MDC 验证 - DMI (趋势动能，参数可被覆盖)
+    adx_floor = get_active_param("b1", "adx_floor", 40)
     adx = getattr(today, "adx", None)
-    if _safe_num(adx) > 40:
+    if _safe_num(adx) > adx_floor:
         confidence += 0.10
         mdc_details.append(f"ADX高位动能竭尽({_safe_num(adx):.1f})")
 
@@ -151,7 +156,8 @@ def detect_b2(klines: list[DailyData], index: int, kirin_context: dict | None = 
     # 放量长阳
     is_beidou = today.is_beidou
     pct_chg = today.pct_chg
-    is_long_yang = pct_chg >= 4
+    b2_min_pct = get_active_param("b2", "min_pct", 4.0)
+    is_long_yang = pct_chg >= b2_min_pct
 
     if not (is_long_yang and is_beidou):
         return None
@@ -322,7 +328,8 @@ def detect_sb1(klines: list[DailyData], index: int) -> StrategySignal | None:
     # J值
     k, d, j = _get_kdj(klines, index)
 
-    if j >= -5:
+    sb1_j_threshold = get_active_param("sb1", "j_negative_threshold", -5)
+    if j >= sb1_j_threshold:
         return None
 
     # 超级B1确认

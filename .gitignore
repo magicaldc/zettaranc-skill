@@ -69,3 +69,8 @@ logs/*.jsonl
 
 # 二进制工具（应通过包管理器安装）
 actionlint
+
+# Darwin self-optimizer artifacts (regenerated each run)
+optimization_drafts/
+logs/results.tsv
+logs/self_optimizer_state.json
