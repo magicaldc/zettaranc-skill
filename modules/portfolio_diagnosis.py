@@ -114,7 +114,6 @@ def diagnose_stock(ts_code: str, days: int = 100) -> DiagnosisReport:
 
     # 战法信号（最近30天内）
     all_signals = detect_all_strategies(ts_code, days=days)
-    [s for s in all_signals if s.trade_date >= indicators.trade_date[:6] + "01" or True]
 
     # 分离买卖信号
     buy_signals = []

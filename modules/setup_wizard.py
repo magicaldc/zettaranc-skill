@@ -54,7 +54,7 @@ def write_env_file(token: str | None = None, mode: str = MODE_NORMAL, env_path: 
     """
     if env_path is None:
         env_path = Path(__file__).parent.parent / ".env"
-    get_mode_display_name(mode)
+
     lines = [
         "# 数据模式: jnb(JNB模式/走Tushare API) 或 websearch(普通小万模式/走网络搜索)",
         f"DATA_MODE={mode}",
