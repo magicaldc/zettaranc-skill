@@ -290,114 +290,79 @@ class ReviewGenerator:
             print(f"分析策略表现失败: {e}")
             return []
 
+    # ==================== 文本生成（参数化模板，消除三处同构 if-else） ====================
+
     def _generate_review_summary(
-        self,
-        ts_code: str,
-        monthly_return: float | None,
-        max_drawdown: float,
-        max_gain: float,
-        buy_signals_count: int,
-        sell_signals_count: int,
-        correct_buy_signals: int,
-        correct_sell_signals: int,
+        self, ts_code: str, monthly_return: float | None,
+        max_drawdown: float, max_gain: float,
+        buy_signals_count: int, sell_signals_count: int,
+        correct_buy_signals: int, correct_sell_signals: int,
     ) -> str:
         """生成复盘总结"""
-        summary_parts = []
+        parts = []
 
-        # 收益总结
         if monthly_return is not None:
-            if monthly_return > 0:
-                summary_parts.append(f"月度收益：+{monthly_return:.2f}%")
-            else:
-                summary_parts.append(f"月度收益：{monthly_return:.2f}%")
+            sign = "+" if monthly_return > 0 else ""
+            parts.append(f"月度收益：{sign}{monthly_return:.2f}%")
 
-        # 风险总结
-        if max_drawdown > 10:
-            summary_parts.append(f"最大回撤：{max_drawdown:.2f}%（较高）")
-        elif max_drawdown > 5:
-            summary_parts.append(f"最大回撤：{max_drawdown:.2f}%（中等）")
-        else:
-            summary_parts.append(f"最大回撤：{max_drawdown:.2f}%（较低）")
+        dd_label = "较高" if max_drawdown > 10 else "中等" if max_drawdown > 5 else "较低"
+        parts.append(f"最大回撤：{max_drawdown:.2f}%（{dd_label}）")
 
-        # 信号总结
         if buy_signals_count > 0:
-            buy_accuracy = correct_buy_signals / buy_signals_count * 100
-            summary_parts.append(f"买入信号：{buy_signals_count}次，准确率{buy_accuracy:.1f}%")
+            acc = correct_buy_signals / buy_signals_count * 100
+            parts.append(f"买入信号：{buy_signals_count}次，准确率{acc:.1f}%")
 
         if sell_signals_count > 0:
-            sell_accuracy = correct_sell_signals / sell_signals_count * 100
-            summary_parts.append(f"卖出信号：{sell_signals_count}次，准确率{sell_accuracy:.1f}%")
+            acc = correct_sell_signals / sell_signals_count * 100
+            parts.append(f"卖出信号：{sell_signals_count}次，准确率{acc:.1f}%")
 
-        return "；".join(summary_parts)
+        return "；".join(parts)
 
     def _generate_lessons_learned(
-        self,
-        ts_code: str,
-        monthly_return: float | None,
-        max_drawdown: float,
-        buy_signals_count: int,
-        correct_buy_signals: int,
+        self, ts_code: str, monthly_return: float | None,
+        max_drawdown: float, buy_signals_count: int, correct_buy_signals: int,
     ) -> str:
         """生成经验教训"""
-        lessons = []
-
-        # 收益教训
-        if monthly_return is not None:
-            if monthly_return < -5:
-                lessons.append("月度亏损较大，需要加强止损纪律")
-            elif monthly_return > 10:
-                lessons.append("月度收益良好，但要注意止盈")
-
-        # 风险教训
-        if max_drawdown > 15:
-            lessons.append("最大回撤过大，需要优化仓位管理")
-
-        # 信号教训
+        # (条件, 输出) 规则表
+        rules: list[tuple[bool, str]] = [
+            (monthly_return is not None and monthly_return < -5,
+             "月度亏损较大，需要加强止损纪律"),
+            (monthly_return is not None and monthly_return > 10,
+             "月度收益良好，但要注意止盈"),
+            (max_drawdown > 15,
+             "最大回撤过大，需要优化仓位管理"),
+        ]
         if buy_signals_count > 0:
-            buy_accuracy = correct_buy_signals / buy_signals_count * 100
-            if buy_accuracy < 50:
-                lessons.append("买入信号准确率低，需要优化买入条件")
-            elif buy_accuracy > 80:
-                lessons.append("买入信号准确率高，策略有效")
+            acc = correct_buy_signals / buy_signals_count * 100
+            rules.append((acc < 50, "买入信号准确率低，需要优化买入条件"))
+            rules.append((acc > 80, "买入信号准确率高，策略有效"))
 
+        lessons = [msg for cond, msg in rules if cond]
         if not lessons:
             lessons.append("表现中规中矩，继续观察")
-
         return "；".join(lessons)
 
     def _generate_adjustment_suggestions(
-        self,
-        ts_code: str,
-        monthly_return: float | None,
-        max_drawdown: float,
-        buy_signals_count: int,
-        correct_buy_signals: int,
+        self, ts_code: str, monthly_return: float | None,
+        max_drawdown: float, buy_signals_count: int, correct_buy_signals: int,
     ) -> str:
         """生成策略调整建议"""
-        suggestions = []
-
-        # 收益调整
-        if monthly_return is not None:
-            if monthly_return < -5:
-                suggestions.append("收紧止损条件，降低单笔亏损")
-            elif monthly_return > 10:
-                suggestions.append("考虑增加仓位，扩大收益")
-
-        # 风险调整
-        if max_drawdown > 15:
-            suggestions.append("降低单票仓位，分散风险")
-
-        # 信号调整
+        rules: list[tuple[bool, str]] = [
+            (monthly_return is not None and monthly_return < -5,
+             "收紧止损条件，降低单笔亏损"),
+            (monthly_return is not None and monthly_return > 10,
+             "考虑增加仓位，扩大收益"),
+            (max_drawdown > 15,
+             "降低单票仓位，分散风险"),
+        ]
         if buy_signals_count > 0:
-            buy_accuracy = correct_buy_signals / buy_signals_count * 100
-            if buy_accuracy < 50:
-                suggestions.append("增加买入确认条件，提高信号质量")
-            elif buy_accuracy > 80:
-                suggestions.append("当前买入条件有效，可适当放宽")
+            acc = correct_buy_signals / buy_signals_count * 100
+            rules.append((acc < 50, "增加买入确认条件，提高信号质量"))
+            rules.append((acc > 80, "当前买入条件有效，可适当放宽"))
 
+        suggestions = [msg for cond, msg in rules if cond]
         if not suggestions:
             suggestions.append("当前策略表现稳定，无需调整")
-
         return "；".join(suggestions)
 
     def save_review_to_database(self, review_data: dict[str, Any]) -> bool:

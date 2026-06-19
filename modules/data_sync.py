@@ -11,6 +11,7 @@ import threading
 import collections
 import multiprocessing
 import concurrent.futures
+from types import SimpleNamespace
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -97,6 +98,251 @@ def _rate_limit_global() -> None:
     _GLOBAL_LIMITER.wait()
 
 
+# ==================== 指标函数懒加载（v3.x 重构：从 sync_indicator_cache 抽出） ====================
+
+_INDICATOR_FUNCS: SimpleNamespace | None = None
+
+
+def _get_indicator_funcs() -> SimpleNamespace:
+    """延迟导入技术指标函数，模块级单例（避免每次 sync_indicator_cache 重复 import）"""
+    global _INDICATOR_FUNCS
+    if _INDICATOR_FUNCS is None:
+        from .indicators import (
+            get_kline_data,
+            precompute_kdj_sequence,
+            precompute_macd_sequence,
+            calculate_bbi,
+            calculate_ma,
+            calculate_rsi_multi,
+            calculate_wr_multi,
+            calculate_bollinger,
+            calculate_vol_ratio,
+            calculate_zg_white,
+            calculate_dg_yellow,
+            detect_double_line_cross,
+            detect_needle_20,
+            calculate_brick_value,
+            calculate_brick_history,
+            detect_brick_trend,
+            detect_fanbao,
+            detect_volume_pattern,
+            calculate_sell_score,
+            detect_trade_signal,
+            calculate_dmi,
+        )
+        _INDICATOR_FUNCS = SimpleNamespace(
+            get_kline_data=get_kline_data,
+            precompute_kdj_sequence=precompute_kdj_sequence,
+            precompute_macd_sequence=precompute_macd_sequence,
+            calculate_bbi=calculate_bbi,
+            calculate_ma=calculate_ma,
+            calculate_rsi_multi=calculate_rsi_multi,
+            calculate_wr_multi=calculate_wr_multi,
+            calculate_bollinger=calculate_bollinger,
+            calculate_vol_ratio=calculate_vol_ratio,
+            calculate_zg_white=calculate_zg_white,
+            calculate_dg_yellow=calculate_dg_yellow,
+            detect_double_line_cross=detect_double_line_cross,
+            detect_needle_20=detect_needle_20,
+            calculate_brick_value=calculate_brick_value,
+            calculate_brick_history=calculate_brick_history,
+            detect_brick_trend=detect_brick_trend,
+            detect_fanbao=detect_fanbao,
+            detect_volume_pattern=detect_volume_pattern,
+            calculate_sell_score=calculate_sell_score,
+            detect_trade_signal=detect_trade_signal,
+            calculate_dmi=calculate_dmi,
+        )
+    return _INDICATOR_FUNCS
+
+
+def _compute_day_indicators(
+    f: SimpleNamespace,
+    sub_klines: list,
+    today,
+    yesterday,
+    kdj_seq,
+    macd_dif_seq,
+    macd_dea_seq,
+    macd_hist_seq,
+    idx: int,
+) -> dict[str, Any]:
+    """计算单日全部技术指标，返回 dict。
+
+    从 sync_indicator_cache 循环体抽出，使计算逻辑与 SQL 行构建分离。
+    """
+    n = len(sub_klines)
+    closes = [k.close for k in sub_klines]
+
+    # KDJ / MACD（从预计算序列取，O(1)）
+    k, d, j = kdj_seq[idx] if kdj_seq else (50, 50, 50)
+    if macd_dif_seq is not None:
+        dif, dea, macd_hist = macd_dif_seq[idx], macd_dea_seq[idx], macd_hist_seq[idx]
+    else:
+        dif, dea, macd_hist = 0.0, 0.0, 0.0
+
+    # 均线
+    bbi = f.calculate_bbi(sub_klines) if n >= 24 else 0
+    ma5 = f.calculate_ma(closes, 5) if n >= 5 else 0
+    ma10 = f.calculate_ma(closes, 10) if n >= 10 else 0
+    ma20 = f.calculate_ma(closes, 20) if n >= 20 else 0
+    ma60 = f.calculate_ma(closes, 60) if n >= 60 else 0
+
+    # RSI / WR
+    rsi6, rsi12, rsi24 = f.calculate_rsi_multi(sub_klines) if n >= 25 else (50, 50, 50)
+    wr5, wr10 = f.calculate_wr_multi(sub_klines) if n >= 10 else (-50, -50)
+
+    # 布林带
+    boll_vals = f.calculate_bollinger(sub_klines) if n >= 20 else (0, 0, 0, 0, 50)
+    boll_mid, boll_upper, boll_lower, boll_width, boll_pos = boll_vals
+
+    # 量比
+    vol_ratio = f.calculate_vol_ratio(sub_klines)
+
+    # 双线战法
+    zg_white = f.calculate_zg_white(sub_klines) if n >= 115 else 0
+    dg_yellow = f.calculate_dg_yellow(sub_klines) if n >= 115 else 0
+    gold_cross, dead_cross = f.detect_double_line_cross(sub_klines) if n >= 115 else (False, False)
+
+    # 单针下20
+    rsl_short, rsl_long, is_needle = f.detect_needle_20(sub_klines) if n >= 22 else (50, 50, False)
+
+    # 砖型图
+    brick_value = f.calculate_brick_value(sub_klines) if n >= 8 else 0
+    brick_trend, brick_count = f.calculate_brick_history(sub_klines) if n >= 10 else ("NEUTRAL", 0)
+    brick_trend_up = f.detect_brick_trend(sub_klines) if n >= 115 else False
+    is_fanbao = f.detect_fanbao(sub_klines) if n >= 4 else False
+
+    # 量价形态
+    vol_pattern = f.detect_volume_pattern(today, yesterday) if yesterday else {}
+    is_beidou = vol_pattern.get("is_beidou", 0)
+    is_suoliang = vol_pattern.get("is_suoliang", 0)
+    is_jiayin_zhenyang = vol_pattern.get("is_jiayin_zhenyang", 0)
+    is_jiayang_zhenyin = vol_pattern.get("is_jiayang_zhenyin", 0)
+    is_fangliang_yinxian = vol_pattern.get("is_fangliang_yinxian", 0)
+
+    # 卖出评分
+    sell_result = f.calculate_sell_score(sub_klines) if n >= 5 else (3, {})
+    sell_score = sell_result[0]
+    sell_items = sell_result[1] if isinstance(sell_result[1], dict) else {}
+    sell_reason = ",".join([k for k, v in sell_items.items() if not v]) if sell_items else "数据不足"
+
+    # 交易信号
+    signal = f.detect_trade_signal(sub_klines) if n >= 30 else "WATCH"
+    signal_desc = signal.value if hasattr(signal, "value") else str(signal)
+
+    # DMI
+    dmi_plus, dmi_minus, adx = f.calculate_dmi(sub_klines) if n >= 30 else (0, 0, 0)
+
+    # 昨高昨低
+    prev_high = sub_klines[-2].high if n > 1 else 0
+    prev_low = sub_klines[-2].low if n > 1 else 0
+
+    return {
+        # 基础行情
+        "close": today.close,
+        "open": today.open,
+        "high": today.high,
+        "low": today.low,
+        "vol": today.vol,
+        "pct_chg": today.pct_chg,
+        # KDJ
+        "k": k, "d": d, "j": j,
+        # MACD
+        "dif": dif, "dea": dea, "macd_hist": macd_hist,
+        # 均线
+        "bbi": bbi, "ma5": ma5, "ma10": ma10, "ma20": ma20, "ma60": ma60,
+        # RSI / WR
+        "rsi6": rsi6, "rsi12": rsi12, "rsi24": rsi24,
+        "wr5": wr5, "wr10": wr10,
+        # 布林带
+        "boll_mid": boll_mid, "boll_upper": boll_upper, "boll_lower": boll_lower,
+        "boll_width": boll_width, "boll_position": boll_pos,
+        # 量比
+        "vol_ratio": vol_ratio,
+        # 双线
+        "zg_white": zg_white, "dg_yellow": dg_yellow,
+        "gold_cross": gold_cross, "dead_cross": dead_cross,
+        # 单针
+        "rsl_short": rsl_short, "rsl_long": rsl_long, "is_needle": is_needle,
+        # 砖型
+        "brick_value": brick_value, "brick_trend": brick_trend,
+        "brick_count": brick_count, "brick_trend_up": brick_trend_up, "is_fanbao": is_fanbao,
+        # 量价信号
+        "is_beidou": is_beidou, "is_suoliang": is_suoliang,
+        "is_jiayin_zhenyang": is_jiayin_zhenyang,
+        "is_jiayang_zhenyin": is_jiayang_zhenyin,
+        "is_fangliang_yinxian": is_fangliang_yinxian,
+        # 卖出
+        "sell_score": sell_score, "sell_reason": sell_reason,
+        "signal_desc": signal_desc,
+        # 关键价位
+        "prev_high": prev_high, "prev_low": prev_low,
+        # DMI
+        "dmi_plus": dmi_plus, "dmi_minus": dmi_minus, "adx": adx,
+    }
+
+
+# _INDICATOR_INSERT_COLUMNS 与 _build_indicator_row 共用同一列序
+_INDICATOR_INSERT_COLUMNS = (
+    "ts_code, trade_date, close, open, high, low, vol, pct_chg, "
+    "k, d, j, dif, dea, macd_hist, bbi, "
+    "ma5, ma10, ma20, ma60, "
+    "rsi6, rsi12, rsi24, wr5, wr10, "
+    "boll_mid, boll_upper, boll_lower, boll_width, boll_position, "
+    "vol_ratio, zg_white, dg_yellow, "
+    "is_gold_cross, is_dead_cross, "
+    "rsl_short, rsl_long, is_needle_20, "
+    "brick_value, brick_trend, brick_count, brick_trend_up, is_fanbao, "
+    "is_beidou, is_suoliang, is_jiayin_zhenyang, is_jiayang_zhenyin, is_fangliang_yinxian, "
+    "sell_score, sell_reason, signal, signal_desc, "
+    "prev_high, prev_low, dmi_plus, dmi_minus, adx, "
+    "net_lg_mf, net_elg_mf, last_b1_date, last_b1_price, "
+    "last_yidong_date, market_pct_chg, market_dir, updated_at"
+)
+
+
+def _build_indicator_row(ts_code: str, ind: dict[str, Any]) -> tuple:
+    """从 _compute_day_indicators 返回的 dict 构建 INSERT 行 tuple。
+
+    列顺序与 _INDICATOR_INSERT_COLUMNS 保持一致。
+    此函数是唯一的字段→位置映射点，新增字段只需在此修改。
+    """
+    return (
+        ts_code,
+        ind["close"], ind["open"], ind["high"], ind["low"], ind["vol"], ind["pct_chg"],
+        ind["k"], ind["d"], ind["j"],
+        ind["dif"], ind["dea"], ind["macd_hist"],
+        ind["bbi"],
+        ind["ma5"], ind["ma10"], ind["ma20"], ind["ma60"],
+        ind["rsi6"], ind["rsi12"], ind["rsi24"],
+        ind["wr5"], ind["wr10"],
+        ind["boll_mid"], ind["boll_upper"], ind["boll_lower"],
+        ind["boll_width"], ind["boll_position"],
+        ind["vol_ratio"],
+        ind["zg_white"], ind["dg_yellow"],
+        int(ind["gold_cross"]), int(ind["dead_cross"]),
+        ind["rsl_short"], ind["rsl_long"], int(ind["is_needle"]),
+        ind["brick_value"], ind["brick_trend"], ind["brick_count"],
+        int(ind["brick_trend_up"]), int(ind["is_fanbao"]),
+        int(ind["is_beidou"]), int(ind["is_suoliang"]),
+        int(ind["is_jiayin_zhenyang"]), int(ind["is_jiayang_zhenyin"]),
+        int(ind["is_fangliang_yinxian"]),
+        ind["sell_score"], ind["sell_reason"],
+        ind["signal_desc"], ind["signal_desc"],  # signal, signal_desc 当前复用同一值
+        ind["prev_high"], ind["prev_low"],
+        ind["dmi_plus"], ind["dmi_minus"], ind["adx"],
+        0,  # net_lg_mf（暂未实现）
+        0,  # net_elg_mf（暂未实现）
+        None,  # last_b1_date（暂未实现）
+        0,  # last_b1_price（暂未实现）
+        None,  # last_yidong_date（暂未实现）
+        0,  # market_pct_chg（暂未实现）
+        "NEUTRAL",  # market_dir（暂未实现）
+        None,  # updated_at（DEFAULT CURRENT_TIMESTAMP）
+    )
+
+
 class DataSyncer:
     """数据同步器"""
 
@@ -166,6 +412,65 @@ class DataSyncer:
                 )
             result = cursor.fetchone()
             return result["last_date"] if result else None
+
+    # ==================== 批量同步基础设施 ====================
+
+    def _batch_sync(self, task_name: str, sync_fn, ts_codes: list[str]) -> dict[str, int]:
+        """通用批量同步：并发执行 + 进度追踪 + 异常处理
+
+        消除 sync_all_daily_kline / sync_all_indicators / sync_all_stk_factor /
+        sync_all_daily_basic 四个方法中的重复模式。
+
+        Args:
+            task_name: 任务名称（用于日志，如"日线数据"）
+            sync_fn: 同步函数 callable(ts_code) -> count
+            ts_codes: 股票代码列表
+
+        Returns:
+            dict[ts_code] = count
+        """
+        results: dict[str, int] = {}
+        if not ts_codes:
+            return results
+
+        total = len(ts_codes)
+        logger.info(f"开始批量同步{task_name}，共 {total} 只股票...")
+
+        progress_lock = threading.Lock()
+        completed = 0
+
+        def _worker(ts_code: str) -> tuple[str, int]:
+            nonlocal completed
+            try:
+                count = sync_fn(ts_code)
+                with progress_lock:
+                    completed += 1
+                    if completed % 10 == 0:
+                        logger.info(f"进度: {completed}/{total}")
+                return ts_code, count
+            except Exception as e:
+                logger.error(f"{task_name}同步失败 {ts_code}: {e}")
+                with progress_lock:
+                    completed += 1
+                return ts_code, 0
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
+            futures = [executor.submit(_worker, code) for code in ts_codes]
+            for future in concurrent.futures.as_completed(futures):
+                code, count = future.result()
+                results[code] = count
+
+        success_count = sum(1 for v in results.values() if v > 0)
+        logger.info(f"批量{task_name}同步完成，成功 {success_count}/{total}")
+        return results
+
+    @staticmethod
+    def _fetch_all_codes(query: str) -> list[str]:
+        """从数据库查询股票代码列表"""
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            return [row[0] for row in cursor.fetchall()]
 
     # ==================== 股票基本信息 ====================
 
@@ -331,278 +636,59 @@ class DataSyncer:
         return results
 
     def sync_all_daily_kline(self, ts_codes: list[str] | None = None, days: int = 730) -> dict[str, int]:
-        """
-        批量同步多只股票的日线数据（并发执行）
-
-        Args:
-            ts_codes: 股票代码列表，None 表示同步所有股票
-            days: 同步天数，默认2年
-
-        Returns:
-            每只股票的更新条数
-        """
-        results = {}
-
-        # 如果没有指定股票，获取所有股票代码
+        """批量同步日线数据（并发，含智能跳过）"""
         if ts_codes is None:
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ts_code FROM stock_basic")
-                ts_codes = [row["ts_code"] for row in cursor.fetchall()]
+            ts_codes = self._fetch_all_codes("SELECT ts_code FROM stock_basic")
 
-        logger.info(f"开始批量同步日线数据，共 {len(ts_codes)} 只股票...")
-
-        # 计算起始日期
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
-        # 进度追踪锁
-        progress_lock = threading.Lock()
-        completed = 0
-        total = len(ts_codes)
+        def _sync_one(code: str) -> int:
+            # 近2天已同步则跳过
+            last_date = self._get_last_date("daily_kline", code)
+            if last_date and (datetime.now() - datetime.strptime(last_date, "%Y%m%d")).days < 2:
+                return 0
+            return self.sync_daily_kline(code, start_date, end_date)
 
-        def sync_single(ts_code):
-            nonlocal completed
-            try:
-                # 检查是否已有数据，避免重复同步
-                last_date = self._get_last_date("daily_kline", ts_code)
-                if last_date:
-                    last_dt = datetime.strptime(last_date, "%Y%m%d")
-                    if (datetime.now() - last_dt).days < 2:
-                        with progress_lock:
-                            completed += 1
-                        return ts_code, 0  # Skip
-
-                count = self.sync_daily_kline(ts_code, start_date, end_date)
-
-                with progress_lock:
-                    completed += 1
-                    if completed % 10 == 0:
-                        logger.info(f"进度: {completed}/{total}")
-
-                return ts_code, count
-            except Exception as e:
-                logger.error(f"同步失败 {ts_code}: {e}")
-                with progress_lock:
-                    completed += 1
-                return ts_code, 0
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
-            futures = [executor.submit(sync_single, code) for code in ts_codes]
-            for future in concurrent.futures.as_completed(futures):
-                code, count = future.result()
-                results[code] = count
-
-        logger.info(f"批量同步完成，成功 {sum(1 for v in results.values() if v > 0)}/{len(ts_codes)}")
-        return results
+        return self._batch_sync("日线数据", _sync_one, ts_codes)
 
     # ==================== 指标缓存 ====================
 
     def sync_indicator_cache(self, ts_code: str, days: int = 120) -> int:
-        """
-        同步单只股票的技术指标到 indicator_cache 表
+        """同步单只股票技术指标到 indicator_cache 表
 
-        Args:
-            ts_code: 股票代码
-            days: 计算天数
-
-        Returns:
-            更新条数
+        计算流程：
+        1. 加载 K 线数据
+        2. 预计算 KDJ / MACD 全量序列（O(n)，避免循环内 O(n²)）
+        3. 逐日计算指标 → 构建 INSERT 行 → 批量写入
         """
         try:
-            # 导入指标计算模块
-            from .indicators import (
-                get_kline_data,
-                precompute_kdj_sequence,
-                precompute_macd_sequence,
-                calculate_bbi,
-                calculate_ma,
-                calculate_rsi_multi,
-                calculate_wr_multi,
-                calculate_bollinger,
-                calculate_vol_ratio,
-                calculate_zg_white,
-                calculate_dg_yellow,
-                detect_double_line_cross,
-                detect_needle_20,
-                calculate_brick_value,
-                calculate_brick_history,
-                detect_brick_trend,
-                detect_fanbao,
-                detect_volume_pattern,
-                calculate_sell_score,
-                detect_trade_signal,
-                calculate_dmi,
-            )
-
-            # 获取K线数据
-            klines = get_kline_data(ts_code, days)
+            f = _get_indicator_funcs()
+            klines = f.get_kline_data(ts_code, days)
             if not klines:
                 return 0
 
-            # 预计算指标序列（避免循环中O(n²)重复计算）
-            kdj_seq = precompute_kdj_sequence(klines) if len(klines) >= 9 else None
-            macd_dif_seq, macd_dea_seq, macd_hist_seq = (
-                precompute_macd_sequence(klines) if len(klines) >= 30 else (None, None, None)
-            )
+            # 预计算 O(n) 序列
+            kdj_seq = f.precompute_kdj_sequence(klines) if len(klines) >= 9 else None
+            if len(klines) >= 30:
+                macd_dif_seq, macd_dea_seq, macd_hist_seq = f.precompute_macd_sequence(klines)
+            else:
+                macd_dif_seq = macd_dea_seq = macd_hist_seq = None
 
-            # 准备写入数据
+            insert_sql = f"INSERT OR REPLACE INTO indicator_cache ({_INDICATOR_INSERT_COLUMNS}) VALUES ({','.join(['?'] * 60)})"
+
             with get_connection() as conn:
                 cursor = conn.cursor()
-
                 for i, kline in enumerate(klines):
-                    # 计算单日指标
                     sub_klines = klines[: i + 1]
-                    today = kline
                     yesterday = sub_klines[-2] if len(sub_klines) > 1 else None
 
-                    # 获取各项指标（优先从预计算序列取值）
-                    if kdj_seq:
-                        k, d, j = kdj_seq[i]
-                    else:
-                        k, d, j = 50, 50, 50
-
-                    if macd_dif_seq is not None and macd_dea_seq is not None and macd_hist_seq is not None:
-                        dif = macd_dif_seq[i]
-                        dea = macd_dea_seq[i]
-                        macd_hist = macd_hist_seq[i]
-                    else:
-                        dif, dea, macd_hist = 0.0, 0.0, 0.0
-
-                    bbi = calculate_bbi(sub_klines) if len(sub_klines) >= 24 else 0
-
-                    closes = [k.close for k in sub_klines]
-                    ma5 = calculate_ma(closes, 5) if len(closes) >= 5 else 0
-                    ma10 = calculate_ma(closes, 10) if len(closes) >= 10 else 0
-                    ma20 = calculate_ma(closes, 20) if len(closes) >= 20 else 0
-                    ma60 = calculate_ma(closes, 60) if len(closes) >= 60 else 0
-
-                    rsi6, rsi12, rsi24 = calculate_rsi_multi(sub_klines) if len(sub_klines) >= 25 else (50, 50, 50)
-                    wr5, wr10 = calculate_wr_multi(sub_klines) if len(sub_klines) >= 10 else (-50, -50)
-
-                    boll_mid, boll_upper, boll_lower, boll_width, boll_pos = (
-                        calculate_bollinger(sub_klines) if len(sub_klines) >= 20 else (0, 0, 0, 0, 50)
+                    ind = _compute_day_indicators(
+                        f, sub_klines, kline, yesterday,
+                        kdj_seq, macd_dif_seq, macd_dea_seq, macd_hist_seq, i,
                     )
-
-                    vol_ratio = calculate_vol_ratio(sub_klines)
-
-                    zg_white = calculate_zg_white(sub_klines) if len(sub_klines) >= 115 else 0
-                    dg_yellow = calculate_dg_yellow(sub_klines) if len(sub_klines) >= 115 else 0
-                    gold_cross, dead_cross = (
-                        detect_double_line_cross(sub_klines) if len(sub_klines) >= 115 else (False, False)
-                    )
-
-                    rsl_short, rsl_long, is_needle = (
-                        detect_needle_20(sub_klines) if len(sub_klines) >= 22 else (50, 50, False)
-                    )
-
-                    brick_value = calculate_brick_value(sub_klines) if len(sub_klines) >= 8 else 0
-                    brick_trend, brick_count = (
-                        calculate_brick_history(sub_klines) if len(sub_klines) >= 10 else ("NEUTRAL", 0)
-                    )
-                    brick_trend_up = detect_brick_trend(sub_klines) if len(sub_klines) >= 115 else False
-                    is_fanbao = detect_fanbao(sub_klines) if len(sub_klines) >= 4 else False
-
-                    vol_pattern = detect_volume_pattern(today, yesterday) if yesterday else {}
-                    sell_result = calculate_sell_score(sub_klines) if len(sub_klines) >= 5 else (3, {})
-                    sell_score = sell_result[0]
-                    sell_items = sell_result[1] if isinstance(sell_result[1], dict) else {}
-                    sell_reason = ",".join([k for k, v in sell_items.items() if not v]) if sell_items else "数据不足"
-                    signal = detect_trade_signal(sub_klines) if len(sub_klines) >= 30 else "WATCH"
-                    signal_desc = signal.value if hasattr(signal, "value") else str(signal)
-
-                    dmi_plus, dmi_minus, adx = calculate_dmi(sub_klines) if len(sub_klines) >= 30 else (0, 0, 0)
-
-                    # 昨高昨低
-                    prev_high = sub_klines[-2].high if len(sub_klines) > 1 else 0
-                    prev_low = sub_klines[-2].low if len(sub_klines) > 1 else 0
-
-                    cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO indicator_cache
-                        (ts_code, trade_date, close, open, high, low, vol, pct_chg,
-                         k, d, j, dif, dea, macd_hist, bbi,
-                         ma5, ma10, ma20, ma60,
-                         rsi6, rsi12, rsi24, wr5, wr10,
-                         boll_mid, boll_upper, boll_lower, boll_width, boll_position,
-                         vol_ratio, zg_white, dg_yellow,
-                         is_gold_cross, is_dead_cross,
-                         rsl_short, rsl_long, is_needle_20,
-                         brick_value, brick_trend, brick_count, brick_trend_up, is_fanbao,
-                         is_beidou, is_suoliang, is_jiayin_zhenyang, is_jiayang_zhenyin, is_fangliang_yinxian,
-                         sell_score, sell_reason, signal, signal_desc,
-                         prev_high, prev_low, dmi_plus, dmi_minus, adx,
-                         net_lg_mf, net_elg_mf, last_b1_date, last_b1_price,
-                         last_yidong_date, market_pct_chg, market_dir, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            ts_code,
-                            today.trade_date,
-                            today.close,
-                            today.open,
-                            today.high,
-                            today.low,
-                            today.vol,
-                            today.pct_chg,
-                            k,
-                            d,
-                            j,
-                            dif,
-                            dea,
-                            macd_hist,
-                            bbi,
-                            ma5,
-                            ma10,
-                            ma20,
-                            ma60,
-                            rsi6,
-                            rsi12,
-                            rsi24,
-                            wr5,
-                            wr10,
-                            boll_mid,
-                            boll_upper,
-                            boll_lower,
-                            boll_width,
-                            boll_pos,
-                            vol_ratio,
-                            zg_white,
-                            dg_yellow,
-                            int(gold_cross),
-                            int(dead_cross),
-                            rsl_short,
-                            rsl_long,
-                            int(is_needle),
-                            brick_value,
-                            brick_trend,
-                            brick_count,
-                            int(brick_trend_up),
-                            int(is_fanbao),
-                            int(vol_pattern.get("is_beidou", 0)),
-                            int(vol_pattern.get("is_suoliang", 0)),
-                            int(vol_pattern.get("is_jiayin_zhenyang", 0)),
-                            int(vol_pattern.get("is_jiayang_zhenyin", 0)),
-                            int(vol_pattern.get("is_fangliang_yinxian", 0)),
-                            sell_score,
-                            sell_reason,
-                            signal_desc,
-                            signal_desc,
-                            prev_high,
-                            prev_low,
-                            dmi_plus,
-                            dmi_minus,
-                            adx,
-                            0,
-                            0,
-                            None,
-                            0,
-                            None,
-                            0,
-                            "NEUTRAL",
-                            None,
-                        ),
-                    )
+                    row = _build_indicator_row(ts_code, ind)
+                    cursor.execute(insert_sql, row)
 
             self._log_sync("indicator_cache", ts_code, klines[-1].trade_date, "success")
             logger.info(f"指标缓存同步完成: {ts_code}, {len(klines)} 条")
@@ -614,52 +700,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
             return 0
 
     def sync_all_indicators(self, ts_codes: list[str] | None = None) -> dict[str, int]:
-        """
-        批量同步所有股票的指标缓存（并发执行）
-
-        Args:
-            ts_codes: 股票代码列表，None 表示同步所有有K线数据的股票
-
-        Returns:
-            每只股票的更新条数
-        """
-        results = {}
-
+        """批量同步指标缓存（并发）"""
         if ts_codes is None:
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT DISTINCT ts_code FROM daily_kline")
-                ts_codes = [row["ts_code"] for row in cursor.fetchall()]
-
-        logger.info(f"开始批量同步指标缓存，共 {len(ts_codes)} 只股票...")
-
-        progress_lock = threading.Lock()
-        completed = 0
-        total = len(ts_codes)
-
-        def sync_single(ts_code):
-            nonlocal completed
-            try:
-                count = self.sync_indicator_cache(ts_code)
-                with progress_lock:
-                    completed += 1
-                    if completed % 10 == 0:
-                        logger.info(f"进度: {completed}/{total}")
-                return ts_code, count
-            except Exception as e:
-                logger.error(f"指标同步失败 {ts_code}: {e}")
-                with progress_lock:
-                    completed += 1
-                return ts_code, 0
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
-            futures = [executor.submit(sync_single, code) for code in ts_codes]
-            for future in concurrent.futures.as_completed(futures):
-                code, count = future.result()
-                results[code] = count
-
-        logger.info(f"批量指标同步完成，成功 {sum(1 for v in results.values() if v > 0)}/{len(ts_codes)}")
-        return results
+            ts_codes = self._fetch_all_codes("SELECT DISTINCT ts_code FROM daily_kline")
+        return self._batch_sync("指标缓存", self.sync_indicator_cache, ts_codes)
 
     def sync_daily_and_compute(self, ts_codes: list[str] | None = None, days: int = 730) -> dict[str, int]:
         """
@@ -762,56 +806,16 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
             return 0
 
     def sync_all_stk_factor(self, ts_codes: list[str] | None = None, days: int = 365) -> dict[str, int]:
-        """
-        批量同步多只股票的 Tushare 官方指标（并发执行）
-
-        Args:
-            ts_codes: 股票代码列表，None 表示同步所有股票
-            days: 同步天数
-
-        Returns:
-            每只股票的更新条数
-        """
-        results = {}
-
+        """批量同步 Tushare 官方指标（并发）"""
         if ts_codes is None:
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ts_code FROM stock_basic")
-                ts_codes = [row["ts_code"] for row in cursor.fetchall()]
-
-        logger.info(f"开始批量同步 Tushare 指标，共 {len(ts_codes)} 只股票...")
+            ts_codes = self._fetch_all_codes("SELECT ts_code FROM stock_basic")
 
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
-        progress_lock = threading.Lock()
-        completed = 0
-        total = len(ts_codes)
-
-        def sync_single(ts_code):
-            nonlocal completed
-            try:
-                count = self.sync_stk_factor(ts_code, start_date, end_date)
-                with progress_lock:
-                    completed += 1
-                    if completed % 10 == 0:
-                        logger.info(f"进度: {completed}/{total}")
-                return ts_code, count
-            except Exception as e:
-                logger.error(f"Tushare 指标同步失败 {ts_code}: {e}")
-                with progress_lock:
-                    completed += 1
-                return ts_code, 0
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
-            futures = [executor.submit(sync_single, code) for code in ts_codes]
-            for future in concurrent.futures.as_completed(futures):
-                code, count = future.result()
-                results[code] = count
-
-        logger.info(f"批量 Tushare 指标同步完成，成功 {sum(1 for v in results.values() if v > 0)}/{len(ts_codes)}")
-        return results
+        return self._batch_sync(
+            "Tushare指标", lambda code: self.sync_stk_factor(code, start_date, end_date), ts_codes
+        )
 
     # ==================== 每日估值指标 (PE/PB/PS) ====================
 
@@ -900,57 +904,17 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
             return 0
 
     def sync_all_daily_basic(self, ts_codes: list[str] | None = None, days: int = 730) -> dict[str, int]:
-        """
-        批量同步多只股票的每日估值指标（并发执行）
-
-        Args:
-            ts_codes: 股票代码列表，None 表示同步所有有 K 线的股票
-            days: 同步天数，默认 2 年
-
-        Returns:
-            每只股票的更新条数
-        """
+        """批量同步每日估值指标（并发）"""
         self.ensure_daily_basic_columns()
-        results = {}
-
         if ts_codes is None:
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT DISTINCT ts_code FROM daily_kline ORDER BY ts_code")
-                ts_codes = [row[0] for row in cursor.fetchall()]
-
-        logger.info(f"开始批量同步每日估值指标，共 {len(ts_codes)} 只股票...")
+            ts_codes = self._fetch_all_codes("SELECT DISTINCT ts_code FROM daily_kline ORDER BY ts_code")
 
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
-        progress_lock = threading.Lock()
-        completed = 0
-        total = len(ts_codes)
-
-        def sync_single(ts_code):
-            nonlocal completed
-            try:
-                count = self.sync_daily_basic(ts_code, start_date, end_date)
-                with progress_lock:
-                    completed += 1
-                    if completed % 10 == 0:
-                        logger.info(f"进度: {completed}/{total}")
-                return ts_code, count
-            except Exception as e:
-                logger.error(f"估值指标同步失败 {ts_code}: {e}")
-                with progress_lock:
-                    completed += 1
-                return ts_code, 0
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_SYNC_WORKERS) as executor:
-            futures = [executor.submit(sync_single, code) for code in ts_codes]
-            for future in concurrent.futures.as_completed(futures):
-                code, count = future.result()
-                results[code] = count
-
-        logger.info(f"批量估值指标同步完成，成功 {sum(1 for v in results.values() if v > 0)}/{len(ts_codes)}")
-        return results
+        return self._batch_sync(
+            "估值指标", lambda code: self.sync_daily_basic(code, start_date, end_date), ts_codes
+        )
 
     # ==================== 资金流向 ====================
 
