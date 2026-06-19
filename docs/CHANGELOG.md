@@ -2,6 +2,29 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [v3.2.0] - 2026-06-20
+
+
+> **「v3.2.0：P3 指标接入评分体系 + 数据层整合 skill ↔ bridge。」**
+
+### 核心变更
+
+- **P3 指标深度接入评分体系**：
+  - `score_volume_pattern`：接入量比战法 6 场景判定（超级攻击+30/攻击日+25/单向拉升+18/出货日-25/弱势日-15/震荡吸筹+5），降级回简单量比计算
+  - `score_b1_opportunity`：融入沙漏 3 因子（缩量收敛+10/+5、枢轴邻近+8/+4、完美图形+15/良好+5）
+  - CLI `--criteria` 补全 `bull_rope` / `sandglass_perfect` / `volume_ratio_super`
+  - 新增 `tests/test_screener_p3.py`：14 个用例
+- **数据层整合（skill ↔ tushare-data-bridge）**：
+  - 新增 `modules/bridge_client.py`：封装 bridge HTTP API（5 端点：health/daily/stocks/query-local/query-sql）
+  - 3 种运行模式：`auto` / `always` / `never`（`TUSHARE_BRIDGE_ENABLED` 环境变量控制）
+  - 降级网关：bridge 不可用时自动回退到本地 SQLite
+  - 改造 `screener.py`：`get_all_stocks()` / `get_recent_klines()` 优先 bridge，失败回退本地
+  - 新增 `tests/test_bridge_client.py`：20 个用例（配置/健康检查/GET/POST/降级网关）
+- **测试与稳定性**：
+  - 56 测试 passed（screener 36 + bridge 20），0 破坏
+
+---
+
 ## [v3.1.1] - 2026-06-14
 
 
