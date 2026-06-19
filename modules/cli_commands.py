@@ -433,19 +433,9 @@ def cmd_trade(args) -> None:
 
 
 def cmd_daily(args) -> None:
-    """
-    每日工作流命令
+    """每日五步工作流：观察池扫描 → 选股 → 持仓诊断 → 信号汇总 → 日报
 
-    执行五步闭环：
-        1. 扫描观察池（watchlist scan）
-        2. 全市场选股（screener screen_stocks）
-        3. 检查持仓诊断
-        4. 汇总 B1/S1/S2 信号
-        5. 生成日报
-
-    示例：
-        zt daily
-        zt daily --json
+    拆分为 5 个独立步骤函数，每步独立 try/except，互不阻塞。
     """
     use_json = getattr(args, "json", False)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -459,56 +449,64 @@ def cmd_daily(args) -> None:
         "summary": "",
     }
 
-    # ── Step 1: 扫描观察池 ──
+    watches = _daily_step_watchlist(report)
+    _daily_step_screener(report)
+    _daily_step_portfolio(report, watches)
+    _daily_step_signals(report)
+    _daily_step_summary(report)
+
+    # ── 输出 ──
+    if use_json:
+        _json_output(report)
+    else:
+        _print_daily_report(report, today)
+
+
+def _daily_step_watchlist(report: dict) -> list:
+    """Step 1: 扫描观察池，返回 watchlist 列表供后续步骤使用"""
     try:
         from .watchlist import scan_watchlist, list_watch
 
         watches = list_watch()
-        if watches:
-            scan_result = scan_watchlist()
-            alerts = scan_result.get("alerts", [])
-            summary = scan_result.get("summary", {})
-
-            watchlist_scan = {
-                "total": summary.get("total", 0),
-                "b1_count": summary.get("b1_count", 0),
-                "b2_count": summary.get("b2_count", 0),
-                "exit_count": summary.get("exit_count", 0),
-                "break_count": summary.get("break_count", 0),
-                "abnormal_count": summary.get("abnormal_count", 0),
-                "alerts": [],
-            }
-            for a in alerts:
-                watchlist_scan["alerts"].append(
-                    {
-                        "ts_code": a.ts_code,
-                        "name": a.name,
-                        "alert_type": a.alert_type,
-                        "level": a.level,
-                        "message": a.message,
-                    }
-                )
-            report["watchlist_scan"] = watchlist_scan
-
-            # 收集观察池中的信号
-            for a in alerts:
-                if a.alert_type in ("B1", "B2", "EXIT"):
-                    report["signals"].append(
-                        {
-                            "ts_code": a.ts_code,
-                            "name": a.name,
-                            "signal": a.alert_type,
-                            "message": a.message,
-                            "source": "watchlist",
-                        }
-                    )
-        else:
+        if not watches:
             report["watchlist_scan"] = {"total": 0, "alerts": []}
+            return watches
+
+        scan_result = scan_watchlist()
+        alerts = scan_result.get("alerts", [])
+        summary = scan_result.get("summary", {})
+
+        watchlist_scan = {
+            "total": summary.get("total", 0),
+            "b1_count": summary.get("b1_count", 0),
+            "b2_count": summary.get("b2_count", 0),
+            "exit_count": summary.get("exit_count", 0),
+            "break_count": summary.get("break_count", 0),
+            "abnormal_count": summary.get("abnormal_count", 0),
+            "alerts": [
+                {"ts_code": a.ts_code, "name": a.name, "alert_type": a.alert_type,
+                 "level": a.level, "message": a.message}
+                for a in alerts
+            ],
+        }
+        report["watchlist_scan"] = watchlist_scan
+
+        for a in alerts:
+            if a.alert_type in ("B1", "B2", "EXIT"):
+                report["signals"].append({
+                    "ts_code": a.ts_code, "name": a.name,
+                    "signal": a.alert_type, "message": a.message,
+                    "source": "watchlist",
+                })
+        return watches
     except Exception as e:
         _warn(f"观察池扫描失败: {e}")
         report["watchlist_scan"] = {"error": str(e)}
+        return []
 
-    # ── Step 2: 全市场选股（B1 策略，取前 20）──
+
+def _daily_step_screener(report: dict) -> None:
+    """Step 2: 全市场 B1 选股，取前 10"""
     try:
         from .screener import screen_stocks
 
@@ -516,86 +514,75 @@ def cmd_daily(args) -> None:
         top_picks = []
         for s in top_picks_raw[:10]:
             pick = {
-                "ts_code": s.ts_code,
-                "name": s.name,
-                "score": round(s.score, 1),
-                "b1_score": round(s.b1_score, 1),
-                "trend_score": round(s.trend_score, 1),
-                "rating": s.rating,
+                "ts_code": s.ts_code, "name": s.name,
+                "score": round(s.score, 1), "b1_score": round(s.b1_score, 1),
+                "trend_score": round(s.trend_score, 1), "rating": s.rating,
             }
             top_picks.append(pick)
-            # 汇总 B1 信号
             if s.b1_score >= 50:
-                report["signals"].append(
-                    {
-                        "ts_code": s.ts_code,
-                        "name": s.name,
-                        "signal": "B1",
-                        "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
-                        "source": "screener",
-                    }
-                )
+                report["signals"].append({
+                    "ts_code": s.ts_code, "name": s.name, "signal": "B1",
+                    "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
+                    "source": "screener",
+                })
         report["top_picks"] = top_picks
     except Exception as e:
         _warn(f"全市场选股失败: {e}")
         report["top_picks"] = {"error": str(e)}
 
-    # ── Step 3: 持仓检查（观察池中的股票做快速诊断）──
+
+def _daily_step_portfolio(report: dict, watches: list) -> None:
+    """Step 3: 持仓快速诊断（前 5 只）"""
     try:
         from .portfolio_diagnosis import diagnose_stock
 
-        portfolio_status = []
-        # 对观察池中前 5 只做快速诊断
-        check_codes = []
-        if isinstance(report["watchlist_scan"], dict):
-            for a in report["watchlist_scan"].get("alerts", [])[:5]:
+        check_codes: list[str] = []
+        wl = report["watchlist_scan"]
+        if isinstance(wl, dict):
+            for a in wl.get("alerts", [])[:5]:
                 if a["ts_code"] not in check_codes:
                     check_codes.append(a["ts_code"])
-        # 如果观察池没有 alerts，用 list_watch 的股票
         if not check_codes and watches:
             check_codes = [w["ts_code"] for w in watches[:5]]
 
+        portfolio_status = []
         for code in check_codes:
             try:
                 diag = diagnose_stock(code, days=60)
-                portfolio_status.append(
-                    {
-                        "ts_code": code,
-                        "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
-                    }
-                )
+                portfolio_status.append({
+                    "ts_code": code,
+                    "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
+                })
             except Exception as e:
-                portfolio_status.append(
-                    {
-                        "ts_code": code,
-                        "error": str(e),
-                    }
-                )
+                portfolio_status.append({"ts_code": code, "error": str(e)})
         report["portfolio_status"] = portfolio_status
     except Exception as e:
         _warn(f"持仓检查失败: {e}")
         report["portfolio_status"] = {"error": str(e)}
 
-    # ── Step 4: 信号已在 Step 1/2 中收集 ──
-    # 去重（按 ts_code + signal）
-    seen = set()
-    unique_signals = []
+
+def _daily_step_signals(report: dict) -> None:
+    """Step 4: 信号去重"""
+    seen: set[tuple] = set()
+    unique: list = []
     for sig in report["signals"]:
         key = (sig["ts_code"], sig["signal"])
         if key not in seen:
             seen.add(key)
-            unique_signals.append(sig)
-    report["signals"] = unique_signals
+            unique.append(sig)
+    report["signals"] = unique
 
-    # ── Step 5: 生成摘要 ──
+
+def _daily_step_summary(report: dict) -> None:
+    """Step 5: 生成摘要文本"""
     wl = report["watchlist_scan"]
-    b1_count = wl.get("b1_count", 0) if isinstance(wl, dict) else 0
-    exit_count = wl.get("exit_count", 0) if isinstance(wl, dict) else 0
+    is_dict = isinstance(wl, dict)
+    b1_count = wl.get("b1_count", 0) if is_dict else 0
+    exit_count = wl.get("exit_count", 0) if is_dict else 0
     picks_count = len(report["top_picks"]) if isinstance(report["top_picks"], list) else 0
     sig_count = len(report["signals"])
 
-    parts = []
-    parts.append(f"今日观察池 {wl.get('total', 0) if isinstance(wl, dict) else 0} 只")
+    parts = [f"今日观察池 {wl.get('total', 0) if is_dict else 0} 只"]
     if b1_count:
         parts.append(f"出现 B1 信号 {b1_count} 只")
     if exit_count:
@@ -609,46 +596,40 @@ def cmd_daily(args) -> None:
 
     report["summary"] = "，".join(parts) + "。"
 
-    # ── 输出 ──
-    if use_json:
-        _json_output(report)
-    else:
-        print(f"\n{'=' * 60}")
-        print(f"Z哥每日工作流报告  {today}")
-        print(f"{'=' * 60}")
-        print(f"\n{report['summary']}")
 
-        # 观察池
-        if isinstance(wl, dict) and wl.get("alerts"):
-            print(f"\n【观察池信号】({wl.get('total', 0)}只)")
-            for a in wl["alerts"][:10]:
-                print(f"  [{a['alert_type']}] {a['ts_code']} {a['name']}: {a['message']}")
+def _print_daily_report(report: dict, today: str) -> None:
+    """格式化打印每日报告"""
+    wl = report["watchlist_scan"]
+    print(f"\n{'=' * 60}")
+    print(f"Z哥每日工作流报告  {today}")
+    print(f"{'=' * 60}")
+    print(f"\n{report['summary']}")
 
-        # 选股
-        if isinstance(report["top_picks"], list) and report["top_picks"]:
-            print("\n【B1 潜力股 TOP 10】")
-            for i, pick_dict in enumerate(report["top_picks"], 1):
-                print(
-                    f"  {i:2}. {pick_dict['ts_code']} {pick_dict['name']:<8} "
-                    f"评分:{pick_dict['score']:5.1f}  B1:{pick_dict['b1_score']:5.1f}  {pick_dict['rating']}"
-                )
+    if isinstance(wl, dict) and wl.get("alerts"):
+        print(f"\n【观察池信号】({wl.get('total', 0)}只)")
+        for a in wl["alerts"][:10]:
+            print(f"  [{a['alert_type']}] {a['ts_code']} {a['name']}: {a['message']}")
 
-        # 持仓
-        if report["portfolio_status"]:
-            print("\n【持仓诊断】")
-            for p in report["portfolio_status"]:
-                if "error" in p:
-                    print(f"  {p['ts_code']}: 诊断失败 - {p['error']}")
-                else:
-                    print(f"  {p['ts_code']}: {p['diagnosis']}")
+    if isinstance(report["top_picks"], list) and report["top_picks"]:
+        print("\n【B1 潜力股 TOP 10】")
+        for i, p in enumerate(report["top_picks"], 1):
+            print(f"  {i:2}. {p['ts_code']} {p['name']:<8} "
+                  f"评分:{p['score']:5.1f}  B1:{p['b1_score']:5.1f}  {p['rating']}")
 
-        # 信号汇总
-        if report["signals"]:
-            print(f"\n【信号汇总】({len(report['signals'])}条)")
-            for sig in report["signals"]:
-                print(f"  [{sig['signal']}] {sig['ts_code']} {sig['name']}: {sig['message']}")
+    if report["portfolio_status"]:
+        print("\n【持仓诊断】")
+        for p in report["portfolio_status"]:
+            if "error" in p:
+                print(f"  {p['ts_code']}: 诊断失败 - {p['error']}")
+            else:
+                print(f"  {p['ts_code']}: {p['diagnosis']}")
 
-        print(f"\n{'=' * 60}")
+    if report["signals"]:
+        print(f"\n【信号汇总】({len(report['signals'])}条)")
+        for sig in report["signals"]:
+            print(f"  [{sig['signal']}] {sig['ts_code']} {sig['name']}: {sig['message']}")
+
+    print(f"\n{'=' * 60}")
 
 
 def cmd_monitor(args):

@@ -127,23 +127,25 @@ def backtest_signals(
         if current_trade is not None:
             entry_high = max(entry_high, day_high)
 
-            # 止损
-            if day_low <= current_trade.entry_price * (1 - stop_loss_pct):
+            if _is_stop_loss_triggered(day_low, current_trade.entry_price, stop_loss_pct):
+                exit_price = _stop_loss_price(current_trade.entry_price, stop_loss_pct)
                 current_trade.exit_date = date
-                current_trade.exit_price = current_trade.entry_price * (1 - stop_loss_pct)
-                current_trade.pnl = current_trade.exit_price - current_trade.entry_price
-                current_trade.pnl_pct = current_trade.pnl / current_trade.entry_price
+                current_trade.exit_price = exit_price
+                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(
+                    current_trade.entry_price, exit_price
+                )
                 current_trade.exit_reason = "stop_loss"
                 result.trades.append(current_trade)
                 current_trade = None
                 continue
 
-            # 止盈
-            if day_high >= current_trade.entry_price * (1 + take_profit_pct):
+            if _is_take_profit_triggered(day_high, current_trade.entry_price, take_profit_pct):
+                exit_price = _take_profit_price(current_trade.entry_price, take_profit_pct)
                 current_trade.exit_date = date
-                current_trade.exit_price = current_trade.entry_price * (1 + take_profit_pct)
-                current_trade.pnl = current_trade.exit_price - current_trade.entry_price
-                current_trade.pnl_pct = current_trade.pnl / current_trade.entry_price
+                current_trade.exit_price = exit_price
+                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(
+                    current_trade.entry_price, exit_price
+                )
                 current_trade.exit_reason = "take_profit"
                 result.trades.append(current_trade)
                 current_trade = None
@@ -165,23 +167,21 @@ def backtest_signals(
 
         # 卖出信号
         elif sig.action == "SELL" and current_trade is not None:
-            current_trade.exit_date = date
-            current_trade.exit_price = price
-            current_trade.pnl = price - current_trade.entry_price
-            current_trade.pnl_pct = current_trade.pnl / current_trade.entry_price
-            current_trade.exit_reason = "signal"
-            result.trades.append(current_trade)
+            trade = _make_trade(
+                ts_code, current_trade.entry_date, current_trade.entry_price,
+                date, price, "signal",
+            )
+            result.trades.append(trade)
             current_trade = None
 
     # 数据末尾强制平仓
     if current_trade is not None and klines:
         last = klines[-1]
-        current_trade.exit_date = last["trade_date"]
-        current_trade.exit_price = last["close"]
-        current_trade.pnl = last["close"] - current_trade.entry_price
-        current_trade.pnl_pct = current_trade.pnl / current_trade.entry_price
-        current_trade.exit_reason = "end_of_data"
-        result.trades.append(current_trade)
+        trade = _make_trade(
+            ts_code, current_trade.entry_date, current_trade.entry_price,
+            last["trade_date"], last["close"], "end_of_data",
+        )
+        result.trades.append(trade)
 
     # 计算统计指标
     if result.trades:
@@ -339,6 +339,53 @@ def _calc_shares(invest_amount: float, price: float) -> int:
     return shares
 
 
+# ==================== 通用回测工具函数（v3.x 重构：消除 3 处重复） ====================
+
+
+def _calc_pnl(entry_price: float, exit_price: float, shares: int = 1) -> tuple[float, float]:
+    """计算盈亏金额和比例（shares=1 时 pnl 即价差）"""
+    pnl = (exit_price - entry_price) * shares
+    pnl_pct = (exit_price - entry_price) / entry_price if entry_price > 0 else 0.0
+    return pnl, pnl_pct
+
+
+def _make_trade(ts_code: str, entry_date: str, entry_price: float,
+                exit_date: str, exit_price: float, reason: str,
+                shares: int = 1) -> Trade:
+    """构建 Trade 记录（统一创建入口，避免各方法手写 Trade(...)）"""
+    pnl, pnl_pct = _calc_pnl(entry_price, exit_price, shares)
+    return Trade(
+        ts_code=ts_code,
+        entry_date=entry_date,
+        entry_price=entry_price,
+        exit_date=exit_date,
+        exit_price=exit_price,
+        pnl=pnl,
+        pnl_pct=pnl_pct,
+        exit_reason=reason,
+    )
+
+
+def _is_stop_loss_triggered(day_low: float, entry_price: float, stop_loss_pct: float) -> bool:
+    """检查止损触发"""
+    return day_low <= entry_price * (1 - stop_loss_pct)
+
+
+def _is_take_profit_triggered(day_high: float, entry_price: float, take_profit_pct: float) -> bool:
+    """检查止盈触发"""
+    return day_high >= entry_price * (1 + take_profit_pct)
+
+
+def _stop_loss_price(entry_price: float, stop_loss_pct: float) -> float:
+    """止损价格"""
+    return entry_price * (1 - stop_loss_pct)
+
+
+def _take_profit_price(entry_price: float, take_profit_pct: float) -> float:
+    """止盈价格"""
+    return entry_price * (1 + take_profit_pct)
+
+
 def _calc_stats(result: PortfolioBacktestResult, trading_days: int = 0):
     """计算组合回测统计指标"""
     if not result.equity_curve:
@@ -447,21 +494,12 @@ def backtest_multi_strategy(
             position.update_price(price)
 
             # 止损
-            if day_low <= position.entry_price * (1 - stop_loss_pct):
-                exit_price = position.entry_price * (1 - stop_loss_pct)
-                pnl = (exit_price - position.entry_price) * position.shares
-                pnl_pct = (exit_price - position.entry_price) / position.entry_price
+            if _is_stop_loss_triggered(day_low, position.entry_price, stop_loss_pct):
+                exit_price = _stop_loss_price(position.entry_price, stop_loss_pct)
                 cash += position.shares * exit_price
-
-                trade = Trade(
-                    ts_code=ts_code,
-                    entry_date=position.entry_date,
-                    entry_price=position.entry_price,
-                    exit_date=date,
-                    exit_price=exit_price,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    exit_reason="stop_loss",
+                trade = _make_trade(
+                    ts_code, position.entry_date, position.entry_price,
+                    date, exit_price, "stop_loss", position.shares,
                 )
                 result.trades.append(trade)
                 position = None
@@ -469,21 +507,12 @@ def backtest_multi_strategy(
                 continue
 
             # 止盈
-            if day_high >= position.entry_price * (1 + take_profit_pct):
-                exit_price = position.entry_price * (1 + take_profit_pct)
-                pnl = (exit_price - position.entry_price) * position.shares
-                pnl_pct = (exit_price - position.entry_price) / position.entry_price
+            if _is_take_profit_triggered(day_high, position.entry_price, take_profit_pct):
+                exit_price = _take_profit_price(position.entry_price, take_profit_pct)
                 cash += position.shares * exit_price
-
-                trade = Trade(
-                    ts_code=ts_code,
-                    entry_date=position.entry_date,
-                    entry_price=position.entry_price,
-                    exit_date=date,
-                    exit_price=exit_price,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    exit_reason="take_profit",
+                trade = _make_trade(
+                    ts_code, position.entry_date, position.entry_price,
+                    date, exit_price, "take_profit", position.shares,
                 )
                 result.trades.append(trade)
                 position = None
@@ -525,18 +554,9 @@ def backtest_multi_strategy(
         # 卖出信号
         elif top_signal.action == "SELL" and position is not None:
             cash += position.shares * price
-            pnl = (price - position.entry_price) * position.shares
-            pnl_pct = (price - position.entry_price) / position.entry_price
-
-            trade = Trade(
-                ts_code=ts_code,
-                entry_date=position.entry_date,
-                entry_price=position.entry_price,
-                exit_date=date,
-                exit_price=price,
-                pnl=pnl,
-                pnl_pct=pnl_pct,
-                exit_reason="signal",
+            trade = _make_trade(
+                ts_code, position.entry_date, position.entry_price,
+                date, price, "signal", position.shares,
             )
             result.trades.append(trade)
             position = None
@@ -549,18 +569,9 @@ def backtest_multi_strategy(
         last = klines[-1]
         exit_price = last["close"]
         cash += position.shares * exit_price
-        pnl = (exit_price - position.entry_price) * position.shares
-        pnl_pct = (exit_price - position.entry_price) / position.entry_price
-
-        trade = Trade(
-            ts_code=ts_code,
-            entry_date=position.entry_date,
-            entry_price=position.entry_price,
-            exit_date=last["trade_date"],
-            exit_price=exit_price,
-            pnl=pnl,
-            pnl_pct=pnl_pct,
-            exit_reason="end_of_data",
+        trade = _make_trade(
+            ts_code, position.entry_date, position.entry_price,
+            last["trade_date"], exit_price, "end_of_data", position.shares,
         )
         result.trades.append(trade)
         position = None
@@ -646,39 +657,23 @@ def backtest_portfolio(
             pos.update_price(price)
 
             # 止损
-            if day_low <= pos.entry_price * (1 - stop_loss_pct):
-                exit_price = pos.entry_price * (1 - stop_loss_pct)
-                pnl = (exit_price - pos.entry_price) * pos.shares
+            if _is_stop_loss_triggered(day_low, pos.entry_price, stop_loss_pct):
+                exit_price = _stop_loss_price(pos.entry_price, stop_loss_pct)
                 cash += pos.shares * exit_price
-
-                trade = Trade(
-                    ts_code=ts_code,
-                    entry_date=pos.entry_date,
-                    entry_price=pos.entry_price,
-                    exit_date=date,
-                    exit_price=exit_price,
-                    pnl=pnl,
-                    pnl_pct=(exit_price - pos.entry_price) / pos.entry_price,
-                    exit_reason="stop_loss",
+                trade = _make_trade(
+                    ts_code, pos.entry_date, pos.entry_price,
+                    date, exit_price, "stop_loss", pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
 
             # 止盈
-            elif day_high >= pos.entry_price * (1 + take_profit_pct):
-                exit_price = pos.entry_price * (1 + take_profit_pct)
-                pnl = (exit_price - pos.entry_price) * pos.shares
+            elif _is_take_profit_triggered(day_high, pos.entry_price, take_profit_pct):
+                exit_price = _take_profit_price(pos.entry_price, take_profit_pct)
                 cash += pos.shares * exit_price
-
-                trade = Trade(
-                    ts_code=ts_code,
-                    entry_date=pos.entry_date,
-                    entry_price=pos.entry_price,
-                    exit_date=date,
-                    exit_price=exit_price,
-                    pnl=pnl,
-                    pnl_pct=(exit_price - pos.entry_price) / pos.entry_price,
-                    exit_reason="take_profit",
+                trade = _make_trade(
+                    ts_code, pos.entry_date, pos.entry_price,
+                    date, exit_price, "take_profit", pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
@@ -727,18 +722,9 @@ def backtest_portfolio(
             # 卖出
             elif top_signal.action == "SELL" and pos is not None:
                 cash += pos.shares * price
-                pnl = (price - pos.entry_price) * pos.shares
-                pnl_pct = (price - pos.entry_price) / pos.entry_price
-
-                trade = Trade(
-                    ts_code=ts_code,
-                    entry_date=pos.entry_date,
-                    entry_price=pos.entry_price,
-                    exit_date=date,
-                    exit_price=price,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    exit_reason="signal",
+                trade = _make_trade(
+                    ts_code, pos.entry_date, pos.entry_price,
+                    date, price, "signal", pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
@@ -760,17 +746,9 @@ def backtest_portfolio(
         last = klines[-1]
         exit_price = last["close"]
         cash += pos.shares * exit_price
-        pnl = (exit_price - pos.entry_price) * pos.shares
-
-        trade = Trade(
-            ts_code=ts_code,
-            entry_date=pos.entry_date,
-            entry_price=pos.entry_price,
-            exit_date=last["trade_date"],
-            exit_price=exit_price,
-            pnl=pnl,
-            pnl_pct=(exit_price - pos.entry_price) / pos.entry_price,
-            exit_reason="end_of_data",
+        trade = _make_trade(
+            ts_code, pos.entry_date, pos.entry_price,
+            last["trade_date"], exit_price, "end_of_data", pos.shares,
         )
         result.trades.append(trade)
         data["position"] = None

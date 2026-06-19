@@ -6,6 +6,7 @@ from typing import Optional, Any
 
 import os
 import sqlite3
+import pandas as pd
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -434,7 +435,6 @@ def precompute_kdj_sequence(klines: list[DailyData], period: int = 9) -> list[tu
     """
     预计算全量 KDJ 序列（增量算法，O(n)），使用 Pandas 向量化优化。
     """
-    import pandas as pd
 
     n = len(klines)
     if n < period:
@@ -478,7 +478,6 @@ def precompute_bbi_sequence(klines: list[DailyData]) -> list[float]:
     """
     预计算全量 BBI 序列，使用 Pandas 向量化优化。
     """
-    import pandas as pd
 
     n = len(klines)
     if n < 24:
@@ -506,7 +505,6 @@ def precompute_macd_sequence(
     返回每一天的 (DIF, DEA, MACD_HIST)。
     对于数据不足的天数，返回 0.0。
     """
-    import pandas as pd
 
     n = len(klines)
     if n < slow:
