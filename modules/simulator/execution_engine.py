@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from ..indicators import DailyData
 from . import Position, SimulationConfig, TradeRecord
+from .cost_model import calculate_costs
 
 
 def _apply_slippage_buy(price: float, slippage: float) -> float:
@@ -21,10 +22,6 @@ def _apply_slippage_buy(price: float, slippage: float) -> float:
 def _apply_slippage_sell(price: float, slippage: float) -> float:
     """卖出滑点：降低成交价"""
     return price * (1 - slippage)
-
-
-def _fee(amount: float, rate: float) -> float:
-    return max(amount * rate, 0.01)
 
 
 def execute_buy(
@@ -45,7 +42,8 @@ def execute_buy(
     """
     fill_price = _apply_slippage_buy(kline.open, config.slippage)
     amount = fill_price * position.shares
-    fee = _fee(amount, config.commission_rate)
+    costs = calculate_costs(amount, "BUY", config.cost_model)
+    position.entry_commission = costs["total"]
 
     return TradeRecord(
         ts_code=position.ts_code,
@@ -55,7 +53,10 @@ def execute_buy(
         price=round(fill_price, 3),
         shares=position.shares,
         reason=f"B1信号入场，止损{position.stop_loss:.2f}",
-        fee=fee,
+        fee=costs["total"],
+        stamp_duty=costs["stamp_duty"],
+        transfer_fee=costs["transfer_fee"],
+        notes=["买入成交"],
     )
 
 
@@ -79,13 +80,12 @@ def execute_sell(
     """
     fill_price = _apply_slippage_sell(kline.close, config.slippage)
     amount = fill_price * position.shares
-    fee = _fee(amount, config.commission_rate)
+    sell_costs = calculate_costs(amount, "SELL", config.cost_model)
 
     cost = position.entry_price * position.shares
-    pnl = amount - cost - fee - position.entry_price * position.shares * config.commission_rate
-    pnl_pct = (
-        (fill_price - position.entry_price) / position.entry_price - 2 * config.slippage - 2 * config.commission_rate
-    )
+    total_cost = sell_costs["total"] + position.entry_commission
+    pnl = amount - cost - total_cost
+    pnl_pct = pnl / cost if cost else 0.0
 
     return TradeRecord(
         ts_code=position.ts_code,
@@ -97,7 +97,10 @@ def execute_sell(
         pnl=round(pnl, 2),
         pnl_pct=round(pnl_pct, 4),
         reason=reason,
-        fee=fee,
+        fee=sell_costs["total"],
+        stamp_duty=sell_costs["stamp_duty"],
+        transfer_fee=sell_costs["transfer_fee"],
+        notes=["卖出成交"],
     )
 
 
@@ -123,11 +126,14 @@ def execute_partial_sell(
     """
     fill_price = _apply_slippage_sell(kline.close, config.slippage)
     amount = fill_price * sell_shares
-    fee = _fee(amount, config.commission_rate)
+    sell_costs = calculate_costs(amount, "PARTIAL_SELL", config.cost_model)
 
     cost_basis = position.entry_price * sell_shares
-    pnl = amount - cost_basis - fee
-    pnl_pct = (fill_price - position.entry_price) / position.entry_price
+    ratio = sell_shares / position.shares if position.shares else 0.0
+    proportional_buy_cost = position.entry_commission * ratio
+    total_cost = sell_costs["total"] + proportional_buy_cost
+    pnl = amount - cost_basis - total_cost
+    pnl_pct = pnl / cost_basis if cost_basis else 0.0
 
     return TradeRecord(
         ts_code=position.ts_code,
@@ -139,5 +145,8 @@ def execute_partial_sell(
         pnl=round(pnl, 2),
         pnl_pct=round(pnl_pct, 4),
         reason=reason,
-        fee=fee,
+        fee=sell_costs["total"],
+        stamp_duty=sell_costs["stamp_duty"],
+        transfer_fee=sell_costs["transfer_fee"],
+        notes=["部分卖出成交"],
     )
