@@ -9,10 +9,12 @@ import pytest
 
 from modules.indicators import DailyData
 from modules.simulator import (
+    CostModel,
     MarketRegime,
     Position,
     SimulationConfig,
     SimulationResult,
+    SlippageModel,
     TradeRecord,
 )
 from modules.simulator.execution_engine import execute_buy, execute_sell
@@ -48,6 +50,18 @@ def _make_klines(n=60, ts_code="600519.SH", start_price=100.0, trend=0.01):
         )
         dt += timedelta(days=1)
     return klines
+
+
+def test_simulation_config_default_fields():
+    from modules.simulator import SimulationConfig, CostModel, SlippageModel
+
+    cfg = SimulationConfig()
+    assert cfg.t1_lock is True
+    assert cfg.apply_price_limit is True
+    assert cfg.benchmark_code == "000300.SH"
+    assert cfg.max_position_pct == 0.20
+    assert cfg.cost_model.min_commission == 5.0
+    assert cfg.slippage_model.base_slippage == 0.001
 
 
 class TestPositionSizer:

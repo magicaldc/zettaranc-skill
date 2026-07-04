@@ -6,6 +6,8 @@
 基于已有战法/指标/评分体系，不做新预测模型，只做规则执行与资金管理。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -27,6 +29,26 @@ class SignalVerdict(Enum):
     LOW_SCORE = "评分不足"
     HIGH_RISK = "风险过高"
     BAD_STAGE = "阶段不利"
+
+
+@dataclass
+class CostModel:
+    """真实交易成本模型"""
+
+    commission_rate: float = 0.00025
+    min_commission: float = 5.0
+    stamp_duty_rate: float = 0.0005
+    transfer_fee_rate: float = 0.00001
+    apply_stamp_duty_on_sell: bool = True
+
+
+@dataclass
+class SlippageModel:
+    """动态滑点模型"""
+
+    base_slippage: float = 0.001
+    volatility_multiplier: float = 0.5
+    volume_penalty: float = 0.001
 
 
 @dataclass
@@ -72,6 +94,9 @@ class Position:
     take_profit: float
     risk_amount: float  # 单笔承担风险金额
     partial_exited: bool = False
+    can_sell_date: str = ""  # T+1 最早可卖出日
+    entry_commission: float = 0.0  # 买入时佣金
+    is_st: bool = False  # 是否为 ST/*ST
 
 
 @dataclass
@@ -88,6 +113,9 @@ class TradeRecord:
     pnl_pct: float = 0  # 仅 SELL 时有效，百分比盈亏
     reason: str = ""  # 成交原因
     fee: float = 0
+    stamp_duty: float = 0.0  # 印花税
+    transfer_fee: float = 0.0  # 过户费
+    notes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -108,6 +136,19 @@ class SimulationConfig:
     trailing_ma_days: int = 20  # 移动止盈参考 MA
     allow_short: bool = False  # v0.1 仅做多
     market_neutral_max_positions: int = 2  # 弱势环境下最大持仓
+    # v0.2 新增：真实 A 股约束与进阶模型
+    cost_model: CostModel = field(default_factory=CostModel)
+    slippage_model: SlippageModel = field(default_factory=SlippageModel)
+    use_dynamic_slippage: bool = False
+    use_atr_sizing: bool = False
+    atr_window: int = 20
+    max_position_pct: float = 0.20
+    cash_utilization_limit: float = 0.95
+    allow_st: bool = False
+    t1_lock: bool = True
+    benchmark_code: str = "000300.SH"
+    apply_price_limit: bool = True
+    apply_halt_filter: bool = True
 
 
 @dataclass
@@ -127,11 +168,17 @@ class SimulationResult:
     profit_factor: float = 0
     total_trades: int = 0
     avg_holding_days: float = 0
+    # v0.2 新增：专业绩效指标、基准曲线、被拒买入
+    metrics: Any | None = None
+    benchmark_curve: list[dict[str, Any]] = field(default_factory=list)
+    rejected_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
 __all__ = [
     "MarketRegime",
     "SignalVerdict",
+    "CostModel",
+    "SlippageModel",
     "MarketContext",
     "SignalScore",
     "Position",
