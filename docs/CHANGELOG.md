@@ -2,6 +2,32 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [Unreleased]
+
+### Added
+
+- 新增 `modules/datasource.py`：统一数据源协议 `DataSource` + `TushareDataSource` / `BridgeDataSource` / `SqliteDataSource` / `CompositeDataSource` 实现 + `get_datasource()` 工厂。
+- 新增 `tests/test_datasource.py`、`tests/test_data_sync.py`、`tests/test_screener_data.py`。
+
+### Changed
+
+- **架构重构**：`modules/data_sync.py`（1181 行）拆分为 `modules/data_sync/` 包（`rate_limiter` / `indicator_cache` / `fetcher` / `syncer` / `cli` / `__main__`），`DataSyncer` 支持 `datasource` 依赖注入。
+- **架构重构**：`modules/screener.py`（1161 行）拆分为 `modules/screener/` 包（`models` / `data` / `criteria` / `scoring` / `engine` / `market` / `format` / `workflow` / `cli`），`get_all_stocks()` / `get_recent_klines()` 支持 `datasource` 注入。
+- `modules/cli.py` 的 `cmd_sync` 显式注入 `TushareDataSource`。
+- 保留 `modules/data_sync.py` 和 `modules/screener.py` 作为向后兼容 shim，所有公共导入不变。
+
+### Fixed
+
+- 修复 `api/routes/system.py` 中错误的 `DataSyncer.compute_indicators` 调用，改为正确的 `sync_indicator_cache`。
+
+### Validation
+
+- `pytest tests/`：764 passed, 11 skipped
+- `ruff check modules tests`：All checks passed
+- `mypy modules/ --ignore-missing-imports`：Success, no issues
+
+---
+
 ## [v3.3.1] - 2026-07-04
 
 

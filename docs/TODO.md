@@ -24,6 +24,28 @@
 
 ---
 
+## ✅ 已完成（v3.3.1+ 数据层架构重构 — DataSource 协议 + 大模块拆分）
+
+- [x] **统一 DataSource 协议**：新增 `modules/datasource.py`
+  - 定义 `DataSource` Protocol（`typing.Protocol` + `@runtime_checkable`）
+  - 实现 `TushareDataSource` / `BridgeDataSource` / `SqliteDataSource` / `CompositeDataSource`
+  - `get_datasource()` 工厂支持 `auto` / `tushare` / `bridge` / `sqlite`
+  - Composite `auto` 策略：bridge → SQLite 回退
+- [x] **拆分 `modules/data_sync.py`（1181 行）→ `modules/data_sync/` 包**：
+  - `rate_limiter.py` / `indicator_cache.py` / `fetcher.py` / `syncer.py` / `cli.py` / `__main__.py`
+  - `DataSyncer` 支持 `datasource` 依赖注入，默认 `get_datasource("tushare")`
+  - 保留 `modules/data_sync.py` shim，公共导入 100% 兼容
+- [x] **拆分 `modules/screener.py`（1161 行）→ `modules/screener/` 包**：
+  - `models.py` / `data.py` / `criteria.py` / `scoring.py` / `engine.py` / `market.py` / `format.py` / `workflow.py` / `cli.py`
+  - `get_all_stocks()` / `get_recent_klines()` 支持 `datasource` 注入，默认 `get_datasource()`
+  - 保留 `modules/screener.py` shim，公共导入 100% 兼容
+- [x] **调用方对齐**：`modules/cli.py` 的 `cmd_sync` 显式注入 `TushareDataSource`
+- [x] **修复 pre-existing bug**：`api/routes/system.py` 错误调用 `compute_indicators` → 改为 `sync_indicator_cache`
+- [x] **测试覆盖**：新增 `tests/test_datasource.py`、`tests/test_data_sync.py`、`tests/test_screener_data.py`
+- [x] **验证**：764 passed / 11 skipped，ruff / mypy 零错误
+
+---
+
 ## ✅ 已完成（v3.3.0 Skill-Schema-V2 合规改造）
 
 ### Schema 对齐（V2 三表面 + 安全边界）
