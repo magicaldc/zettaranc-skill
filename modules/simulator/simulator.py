@@ -123,7 +123,7 @@ def _run_single_day(
 
         current_kline = sub_klines[-1]
         if action == "TAKE_PROFIT_PARTIAL":
-            trade = execute_partial_sell(position, current_kline, config, sell_shares, "卤煮：达到2R减半")
+            trade = execute_partial_sell(position, current_kline, config, sell_shares, "卤煮：达到2R减半", sub_klines)
             state.trades.append(trade)
             state.cash += trade.shares * trade.price - trade.fee
             position.shares -= sell_shares
@@ -131,7 +131,7 @@ def _run_single_day(
             remaining_positions.append(position)
         else:
             reason = "止损" if action == "STOP_LOSS" else "移动止盈"
-            trade = execute_sell(position, current_kline, config, reason)
+            trade = execute_sell(position, current_kline, config, reason, sub_klines)
             state.trades.append(trade)
             state.cash += trade.shares * trade.price - trade.fee
             # 已平仓，不再加入 remaining_positions
@@ -184,7 +184,7 @@ def _run_single_day(
             continue
         pos: Position = built
 
-        trade = execute_buy(pos, sub_klines[-1], config)
+        trade = execute_buy(pos, sub_klines[-1], config, sub_klines)
         state.trades.append(trade)
         state.cash -= trade.shares * trade.price + trade.fee
         state.positions.append(pos)

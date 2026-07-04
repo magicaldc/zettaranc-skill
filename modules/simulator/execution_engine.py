@@ -12,6 +12,7 @@ from __future__ import annotations
 from ..indicators import DailyData
 from . import Position, SimulationConfig, TradeRecord
 from .cost_model import calculate_costs
+from .slippage_model import calculate_slippage
 
 
 def _apply_slippage_buy(price: float, slippage: float) -> float:
@@ -28,6 +29,7 @@ def execute_buy(
     position: Position,
     kline: DailyData,
     config: SimulationConfig,
+    klines: list[DailyData] | None = None,
 ) -> TradeRecord:
     """
     模拟买入成交。
@@ -36,11 +38,13 @@ def execute_buy(
         position: 待买入头寸
         kline: 买入日 K 线
         config: 配置
+        klines: 历史 K 线序列，用于动态滑点
 
     Returns:
         TradeRecord
     """
-    fill_price = _apply_slippage_buy(kline.open, config.slippage)
+    slippage = calculate_slippage(kline, klines or [], "BUY", config)
+    fill_price = _apply_slippage_buy(kline.open, slippage)
     amount = fill_price * position.shares
     costs = calculate_costs(amount, "BUY", config.cost_model)
     position.entry_commission = costs["total"]
@@ -65,6 +69,7 @@ def execute_sell(
     kline: DailyData,
     config: SimulationConfig,
     reason: str,
+    klines: list[DailyData] | None = None,
 ) -> TradeRecord:
     """
     模拟卖出成交。
@@ -74,11 +79,13 @@ def execute_sell(
         kline: 卖出日 K 线
         config: 配置
         reason: 卖出原因
+        klines: 历史 K 线序列，用于动态滑点
 
     Returns:
         TradeRecord
     """
-    fill_price = _apply_slippage_sell(kline.close, config.slippage)
+    slippage = calculate_slippage(kline, klines or [], "SELL", config)
+    fill_price = _apply_slippage_sell(kline.close, slippage)
     amount = fill_price * position.shares
     sell_costs = calculate_costs(amount, "SELL", config.cost_model)
 
@@ -110,6 +117,7 @@ def execute_partial_sell(
     config: SimulationConfig,
     sell_shares: int,
     reason: str,
+    klines: list[DailyData] | None = None,
 ) -> TradeRecord:
     """
     模拟部分卖出（卤煮减半）。
@@ -120,11 +128,13 @@ def execute_partial_sell(
         config: 配置
         sell_shares: 卖出股数
         reason: 卖出原因
+        klines: 历史 K 线序列，用于动态滑点
 
     Returns:
         TradeRecord
     """
-    fill_price = _apply_slippage_sell(kline.close, config.slippage)
+    slippage = calculate_slippage(kline, klines or [], "PARTIAL_SELL", config)
+    fill_price = _apply_slippage_sell(kline.close, slippage)
     amount = fill_price * sell_shares
     sell_costs = calculate_costs(amount, "PARTIAL_SELL", config.cost_model)
 
