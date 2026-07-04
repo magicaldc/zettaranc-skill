@@ -61,7 +61,7 @@ def sync_stock(ts_code: str, days: int = 730, indicators: bool = True):
         syncer = DataSyncer()
         syncer.sync_daily_kline(ts_code, days=days)
         if indicators:
-            syncer.compute_indicators(ts_code, days=days)
+            syncer.sync_indicator_cache(ts_code, days=days)
         return StatusResponse(status="ok", message=f"{ts_code} 同步完成")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"同步失败: {e}")
