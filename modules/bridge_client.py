@@ -56,9 +56,9 @@ def set_bridge_config(**kwargs) -> None:
 # ========== 低层 HTTP 调用 ==========
 
 
-def _http_get(path: str, params: dict[str, str] | None = None) -> dict:
+def _http_get(path: str, params: dict[str, str] | None = None, config: BridgeConfig | None = None) -> dict:
     """发送 GET 请求到 bridge"""
-    cfg = get_bridge_config()
+    cfg = config or get_bridge_config()
     url = f"{cfg.base_url}{path}"
     if params:
         query = "&".join(f"{k}={v}" for k, v in params.items())
@@ -71,9 +71,9 @@ def _http_get(path: str, params: dict[str, str] | None = None) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _http_post(path: str, body: dict) -> dict:
+def _http_post(path: str, body: dict, config: BridgeConfig | None = None) -> dict:
     """发送 POST 请求到 bridge"""
-    cfg = get_bridge_config()
+    cfg = config or get_bridge_config()
     url = f"{cfg.base_url}{path}"
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
 
@@ -88,11 +88,14 @@ def _http_post(path: str, body: dict) -> dict:
 # ========== 健康检查 ==========
 
 
-def is_bridge_available() -> bool:
+def is_bridge_available(config: BridgeConfig | None = None) -> bool:
     """
     检查 bridge HTTP API 是否可用
+
+    Args:
+        config: 可选的实例级配置；为空时使用全局配置。
     """
-    cfg = get_bridge_config()
+    cfg = config or get_bridge_config()
     if cfg.enabled == "never":
         return False
     if cfg.enabled == "always":
@@ -100,7 +103,7 @@ def is_bridge_available() -> bool:
         return True
 
     try:
-        resp = _http_get("/health")
+        resp = _http_get("/health", config=cfg)
         return resp.get("status") == "ok"
     except Exception:
         return False
@@ -114,6 +117,7 @@ def get_bridge_daily(
     start_date: str | None = None,
     end_date: str | None = None,
     days: int = 60,
+    config: BridgeConfig | None = None,
 ) -> list[dict]:
     """
     从 bridge 获取日线数据
@@ -123,12 +127,13 @@ def get_bridge_daily(
         start_date: 起始日期 YYYYMMDD（可选）
         end_date: 结束日期 YYYYMMDD（可选）
         days: 如果没有 start_date，则取最近 N 天
+        config: 可选的实例级配置；为空时使用全局配置。
 
     Returns:
         list[dict] 日线数据，按 trade_date 升序排列
         空列表表示无数据或 bridge 不可用
     """
-    if not is_bridge_available():
+    if not is_bridge_available(config):
         return []
 
     # 构造查询参数
@@ -139,7 +144,7 @@ def get_bridge_daily(
         params["end_date"] = end_date
 
     try:
-        resp = _http_get(f"/daily/{ts_code}", params)
+        resp = _http_get(f"/daily/{ts_code}", params, config=config)
         data = resp.get("data", [])
 
         # 按日期升序排列（bridge 默认 DESC）
@@ -154,17 +159,18 @@ def get_bridge_daily(
         return []
 
 
-def get_bridge_stock_list(exchange: str | None = None) -> list[dict]:
+def get_bridge_stock_list(exchange: str | None = None, config: BridgeConfig | None = None) -> list[dict]:
     """
     从 bridge 获取股票列表
 
     Args:
         exchange: 交易所筛选（可选）
+        config: 可选的实例级配置；为空时使用全局配置。
 
     Returns:
         list[dict] 股票基本信息
     """
-    if not is_bridge_available():
+    if not is_bridge_available(config):
         return []
 
     params: dict[str, str] = {}
@@ -172,7 +178,7 @@ def get_bridge_stock_list(exchange: str | None = None) -> list[dict]:
         params["exchange"] = exchange
 
     try:
-        resp = _http_get("/stocks", params)
+        resp = _http_get("/stocks", params, config=config)
         return resp.get("stocks", [])
     except Exception:
         return []
@@ -246,6 +252,7 @@ def get_daily_klines(
     days: int = 60,
     start_date: str | None = None,
     end_date: str | None = None,
+    config: BridgeConfig | None = None,
 ) -> list[dict]:
     """
     获取日线 K 线（统一入口）
@@ -255,11 +262,14 @@ def get_daily_klines(
     2. 如果 bridge 返回空或失败，回退到本地 SQLite
     3. 如果 bridge 被禁用（enabled=never），直接走本地
 
+    Args:
+        config: 可选的实例级配置；为空时使用全局配置。
+
     Returns:
         list[dict] 日线数据，按 trade_date 升序
     """
     # 尝试 bridge
-    bridge_data = get_bridge_daily(ts_code, start_date, end_date, days)
+    bridge_data = get_bridge_daily(ts_code, start_date, end_date, days, config=config)
     if bridge_data:
         return bridge_data
 
@@ -269,13 +279,17 @@ def get_daily_klines(
 
 def get_all_stocks_bridge_first(
     exchange: str | None = None,
+    config: BridgeConfig | None = None,
 ) -> list[dict]:
     """
     获取所有股票列表（统一入口）
 
     策略同 get_daily_klines：bridge 优先，失败回退本地
+
+    Args:
+        config: 可选的实例级配置；为空时使用全局配置。
     """
-    bridge_data = get_bridge_stock_list(exchange)
+    bridge_data = get_bridge_stock_list(exchange, config=config)
     if bridge_data:
         return bridge_data
 

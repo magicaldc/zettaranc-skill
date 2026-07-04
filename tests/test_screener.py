@@ -176,3 +176,61 @@ class TestScreenerShim:
         ]
         for name in public_names:
             assert hasattr(shim, name), f"shim 缺少 {name}"
+
+
+class UnpicklableDataSource:
+    """用于验证 screen_stocks 在 datasource 不可 pickle 时回退串行。"""
+
+    @property
+    def name(self):
+        return "unpicklable"
+
+    def health_check(self):
+        return True
+
+    def get_daily(self, ts_code, start_date, end_date):
+        return None
+
+    def get_index_daily(self, ts_code, start_date, end_date):
+        return None
+
+    def get_realtime_quote(self, ts_codes):
+        return None
+
+    def get_moneyflow(self, ts_code, trade_date):
+        return None
+
+    def get_daily_basic(self, ts_code, start_date, end_date):
+        return None
+
+    def get_stk_factor(self, ts_code, start_date, end_date):
+        return None
+
+    def get_stock_basic(self, ts_code=None, name=None):
+        return None
+
+    def get_trade_cal(self, exchange, start_date, end_date):
+        return None
+
+    def get_stock_list(self, exchange=None):
+        return [{"ts_code": f"00000{i}.SZ", "name": f"Stock{i}", "market": "主板"} for i in range(60)]
+
+    def get_kline_dicts(self, ts_code, days=60, start_date=None, end_date=None):
+        return []
+
+    def __reduce__(self):
+        raise TypeError("故意不可 pickle")
+
+
+def test_screen_stocks_falls_back_to_serial_when_datasource_unpicklable(monkeypatch, caplog):
+    """注入不可 pickle 的 datasource 时，screen_stocks 应回退串行并记录 warning。"""
+    from modules.screener import engine
+
+    monkeypatch.setattr(engine, "_PARALLEL_THRESHOLD", 0)
+
+    with caplog.at_level("WARNING"):
+        results = screen_stocks(criteria="b1", datasource=UnpicklableDataSource())
+
+    assert isinstance(results, list)
+    assert "无法被 pickle 序列化" in caplog.text
+    assert "回退到串行模式" in caplog.text

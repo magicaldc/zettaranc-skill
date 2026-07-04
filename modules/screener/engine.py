@@ -1,6 +1,8 @@
 """选股分析引擎（单股分析与批量筛选）。"""
 
+import logging
 import os
+import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from ..database import get_db_connection
@@ -17,9 +19,20 @@ from .scoring import (
     score_volume_pattern,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # 并行化阈值：小于此数量不启用多进程（启动开销不值得）
 _PARALLEL_THRESHOLD = 50
+
+
+def _is_picklable(obj) -> bool:
+    """检查对象是否可被 pickle 序列化（用于多进程传参预检）。"""
+    try:
+        pickle.dumps(obj)
+        return True
+    except Exception:
+        return False
 
 
 def analyze_stock(ts_code: str, klines: list[DailyData] | None = None, datasource: DataSource | None = None) -> StockScore:
@@ -213,7 +226,7 @@ def screen_stocks(
 
     max_stocks: 最大扫描数量，0=全量（默认500只性能保护）
     max_workers: 并行进程数，0=自动（CPU核心数）
-    use_parallel: 是否启用多进程并行（<50只时自动关闭）
+    use_parallel: 是否启用多进程并行（<50只时自动关闭；注入的 datasource 需可 pickle）
 
     返回：满足条件的 StockScore 列表（按评分降序）
     """
@@ -224,7 +237,16 @@ def screen_stocks(
     results: list[StockScore] = []
 
     # 小数据量时禁用并行（启动开销不值得）
-    if not use_parallel or len(stocks) < _PARALLEL_THRESHOLD:
+    use_parallel = use_parallel and len(stocks) >= _PARALLEL_THRESHOLD
+
+    # 注入的 datasource 必须可 pickle 才能在多进程间传递
+    if use_parallel and datasource is not None and not _is_picklable(datasource):
+        logger.warning(
+            "注入的 datasource 无法被 pickle 序列化，screen_stocks 将回退到串行模式"
+        )
+        use_parallel = False
+
+    if not use_parallel:
         # 串行模式
         for stock in stocks:
             result = _analyze_worker(stock["ts_code"], datasource=datasource)

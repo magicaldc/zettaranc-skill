@@ -8,7 +8,7 @@ Tushare 中转 API 客户端
 import os
 import time
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 try:
     import requests  # noqa: F401  可用性检查
@@ -97,16 +97,17 @@ class TushareClient:
                 )
                 time.sleep(sleep_time)
 
-    def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_daily(self, ts_code: str, start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame | None:
         """获取日线行情（个股，前复权）"""
+        kwargs: dict[str, Any] = {"ts_code": ts_code, "adj": "qfq", "api": self._pro}
+        if start_date:
+            kwargs["start_date"] = start_date
+        if end_date:
+            kwargs["end_date"] = end_date
         return self._call_api_with_retry(
             "get_daily",
             ts.pro_bar,
-            ts_code=ts_code,
-            start_date=start_date,
-            end_date=end_date,
-            adj="qfq",
-            api=self._pro,
+            **kwargs,
         )
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:

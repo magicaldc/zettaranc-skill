@@ -2,6 +2,7 @@
 DataSource 协议与实现测试
 """
 
+import pandas as pd
 import pytest
 
 from modules.bridge_client import BridgeConfig, get_bridge_config, is_bridge_available
@@ -25,7 +26,7 @@ class FakeDataSource:
     def health_check(self) -> bool:
         return True
 
-    def get_daily(self, ts_code: str, start_date: str, end_date: str):
+    def get_daily(self, ts_code: str, start_date: str | None = None, end_date: str | None = None):
         return None
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str):
@@ -72,6 +73,24 @@ def test_tushare_datasource_name():
     assert TushareDataSource().name == "tushare"
 
 
+def test_tushare_datasource_get_kline_dicts_omits_empty_dates(monkeypatch):
+    """未指定起止日期时，不应向 TushareClient.get_daily 传入空字符串。"""
+    captured: list[dict] = []
+
+    def capture_get_daily(self, ts_code, start_date=None, end_date=None):
+        captured.append({"ts_code": ts_code, "start_date": start_date, "end_date": end_date})
+        return pd.DataFrame(
+            [{"trade_date": "20260101", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "vol": 100, "amount": 150, "pct_chg": 0.5}]
+        )
+
+    monkeypatch.setattr("modules.datasource.TushareClient.get_daily", capture_get_daily)
+    ds = TushareDataSource()
+    result = ds.get_kline_dicts("600519.SH")
+    assert len(result) == 1
+    assert captured[-1]["start_date"] is None
+    assert captured[-1]["end_date"] is None
+
+
 def test_bridge_datasource_name():
     assert BridgeDataSource().name == "bridge"
 
@@ -81,7 +100,7 @@ def test_sqlite_datasource_name():
 
 
 def test_composite_prefers_bridge_when_available(monkeypatch):
-    monkeypatch.setattr("modules.datasource.is_bridge_available", lambda: True)
+    monkeypatch.setattr("modules.datasource.is_bridge_available", lambda config=None: True)
     ds = CompositeDataSource()
     assert ds.health_check() is True
 
@@ -130,20 +149,49 @@ def test_get_datasource_factory():
     assert ds.name == "sqlite"
 
 
-def test_bridge_datasource_with_custom_config(monkeypatch):
-    """传入自定义 BridgeConfig 后应更新全局 bridge 配置。"""
-    # 重置全局配置到已知状态
+def test_bridge_datasource_with_custom_config_does_not_mutate_global(monkeypatch):
+    """传入自定义 BridgeConfig 不应修改全局 bridge 配置，且实例方法使用自身配置。"""
     from modules.bridge_client import set_bridge_config
 
+    # 重置全局配置到已知状态
     set_bridge_config(host="127.0.0.1", port=8765, timeout=10, enabled="auto")
     custom = BridgeConfig(host="10.0.0.1", port=9999, timeout=3, enabled="never")
+
+    captured: list[BridgeConfig | None] = []
+
+    def capture_is_available(config=None):
+        captured.append(config)
+        return False  # 统一返回不可用，避免真实 HTTP 请求
+
+    monkeypatch.setattr("modules.datasource.is_bridge_available", capture_is_available)
+
     ds = BridgeDataSource(config=custom)
     assert ds._config == custom
+
+    # 健康检查应把实例配置透传下去
+    ds.health_check()
+    assert captured == [custom]
+
+    # 全局配置保持不变
     cfg = get_bridge_config()
-    assert cfg.host == "10.0.0.1"
-    assert cfg.port == 9999
-    assert cfg.timeout == 3
-    assert cfg.enabled == "never"
+    assert cfg.host == "127.0.0.1"
+    assert cfg.port == 8765
+    assert cfg.timeout == 10
+    assert cfg.enabled == "auto"
+
+
+def test_bridge_datasource_default_uses_global_config(monkeypatch):
+    """未传 config 时，BridgeDataSource 使用全局 bridge 配置。"""
+    captured: list[BridgeConfig | None] = []
+
+    def capture_is_available(config=None):
+        captured.append(config)
+        return False
+
+    monkeypatch.setattr("modules.datasource.is_bridge_available", capture_is_available)
+    ds = BridgeDataSource()
+    ds.health_check()
+    assert captured == [None]
 
 
 def test_composite_auto_does_not_use_tushare(monkeypatch, temp_db, db_conn):
@@ -151,7 +199,7 @@ def test_composite_auto_does_not_use_tushare(monkeypatch, temp_db, db_conn):
     from tests.conftest import write_klines_to_db, write_stock_basic
 
     # bridge 不可用
-    monkeypatch.setattr("modules.datasource.is_bridge_available", lambda: False)
+    monkeypatch.setattr("modules.datasource.is_bridge_available", lambda config=None: False)
     # 标记 TushareDataSource.get_kline_dicts 被调用即失败
     original_get_kline_dicts = TushareDataSource.get_kline_dicts
 

@@ -62,7 +62,7 @@ class TushareDataSource:
     def health_check(self) -> bool:
         return self._client.check_connection()
 
-    def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+    def get_daily(self, ts_code: str, start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame | None:
         return self._client.get_daily(ts_code, start_date, end_date)
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
@@ -111,7 +111,7 @@ class TushareDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> list[dict]:
-        df = self.get_daily(ts_code, start_date or "", end_date or "")
+        df = self.get_daily(ts_code, start_date, end_date)
         if df is None or df.empty:
             return []
         records = df.to_dict("records")
@@ -122,24 +122,21 @@ class TushareDataSource:
 
 
 class BridgeDataSource:
-    """Tushare Data Bridge HTTP API 数据源封装。"""
+    """Tushare Data Bridge HTTP API 数据源封装。
+
+    支持传入实例级 ``BridgeConfig``，不会修改全局 bridge 配置。
+    若未传 config，则使用当前全局配置。
+    """
 
     def __init__(self, config: BridgeConfig | None = None):
         self._config = config
-        if config is not None:
-            set_bridge_config(
-                host=config.host,
-                port=config.port,
-                timeout=config.timeout,
-                enabled=config.enabled,
-            )
 
     @property
     def name(self) -> str:
         return "bridge"
 
     def health_check(self) -> bool:
-        return is_bridge_available()
+        return is_bridge_available(self._config)
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         return None
@@ -166,7 +163,7 @@ class BridgeDataSource:
         return None
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
-        return get_all_stocks_bridge_first(exchange)
+        return get_all_stocks_bridge_first(exchange, config=self._config)
 
     def get_kline_dicts(
         self,
@@ -175,7 +172,7 @@ class BridgeDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> list[dict]:
-        return get_daily_klines(ts_code, days=days, start_date=start_date, end_date=end_date)
+        return get_daily_klines(ts_code, days=days, start_date=start_date, end_date=end_date, config=self._config)
 
 
 class SqliteDataSource:
@@ -261,7 +258,14 @@ class SqliteDataSource:
 
 
 class CompositeDataSource:
-    """组合数据源：按配置优先级自动回退。"""
+    """组合数据源：按配置优先级自动回退。
+
+    当前实现中，bridge / SQLite 仅提供 ``get_stock_list`` 与 ``get_kline_dicts``
+    两个接口的完整回退；其余 DataSource 方法（如 ``get_daily``、
+    ``get_stk_factor``、``get_moneyflow`` 等）仅在 ``preferred="tushare"``
+    时生效，其他 preferred 模式下返回 ``None``。这是由底层 bridge/SQLite
+    能力范围决定的，后续如需完整 Composite 可在此扩展。
+    """
 
     def __init__(self, preferred: str = "auto"):
         self._preferred = preferred
