@@ -63,9 +63,7 @@ def _available_dates(ts_code: str, days: int, datasource: DataSource) -> list[st
     return [k["trade_date"] for k in raw]
 
 
-def _load_benchmark_curve(
-    dates: list[str], benchmark_code: str, datasource: DataSource
-) -> list[dict[str, Any]]:
+def _load_benchmark_curve(dates: list[str], benchmark_code: str, datasource: DataSource) -> list[dict[str, Any]]:
     """加载基准指数在回测区间内的收盘价曲线。"""
     if not dates or not benchmark_code:
         return []
@@ -414,9 +412,7 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
         benchmark_curve = []
     result.benchmark_curve = benchmark_curve
     result.rejected_entries = getattr(state, "rejected_entries", None) or []
-    result.metrics = calculate_metrics(
-        result.equity_curve, benchmark_curve, result.trades
-    )
+    result.metrics = calculate_metrics(result.equity_curve, benchmark_curve, result.trades)
 
     return result
 

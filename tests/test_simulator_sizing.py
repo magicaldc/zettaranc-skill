@@ -13,7 +13,9 @@ from modules.simulator import CostModel, SimulationConfig
 from modules.simulator.position_sizer import build_position, calculate_position_size
 
 
-def _make_klines(n: int = 60, ts_code: str = "000001.SZ", start_price: float = 100.0, trend: float = 0.0) -> list[DailyData]:
+def _make_klines(
+    n: int = 60, ts_code: str = "000001.SZ", start_price: float = 100.0, trend: float = 0.0
+) -> list[DailyData]:
     """生成测试 K 线（DailyData 对象）"""
     klines: list[DailyData] = []
     dt = datetime(2024, 1, 1)

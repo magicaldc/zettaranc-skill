@@ -178,9 +178,7 @@ def calculate_metrics(
 
         metrics.avg_win = statistics.mean(wins) if wins else 0.0
         metrics.avg_loss = abs(statistics.mean(losses)) if losses else 0.0
-        metrics.gain_loss_ratio = (
-            metrics.avg_win / metrics.avg_loss if metrics.avg_loss > 0 else 0.0
-        )
+        metrics.gain_loss_ratio = metrics.avg_win / metrics.avg_loss if metrics.avg_loss > 0 else 0.0
 
         # 最大连胜 / 连亏
         max_wins = 0

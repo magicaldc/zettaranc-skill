@@ -536,10 +536,12 @@ def test_run_simulation_returns_metrics():
     mock_ds.get_index_daily.return_value = MagicMock()
     mock_ds.get_index_daily.return_value.empty = True
 
-    with patch("modules.simulator.simulator.get_datasource", return_value=mock_ds), \
-         patch("modules.simulator.simulator.get_recent_klines", return_value=klines), \
-         patch("modules.simulator.simulator.get_market_context") as mock_ctx, \
-         patch("modules.simulator.simulator.evaluate_stock") as mock_eval:
+    with (
+        patch("modules.simulator.simulator.get_datasource", return_value=mock_ds),
+        patch("modules.simulator.simulator.get_recent_klines", return_value=klines),
+        patch("modules.simulator.simulator.get_market_context") as mock_ctx,
+        patch("modules.simulator.simulator.evaluate_stock") as mock_eval,
+    ):
         mock_ctx.return_value = MarketContext(
             date=sim_dates[0],
             regime=MarketRegime.NEUTRAL,
@@ -562,9 +564,7 @@ def test_run_simulation_returns_metrics():
             verdict=SignalVerdict.PASS,
         )
 
-        result = run_simulation(
-            ts_codes=["600519.SH"], days=30, config=SimulationConfig(), datasource=mock_ds
-        )
+        result = run_simulation(ts_codes=["600519.SH"], days=30, config=SimulationConfig(), datasource=mock_ds)
 
     assert result.metrics is not None
     assert len(result.equity_curve) == 30

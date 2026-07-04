@@ -86,9 +86,7 @@ def check_exit(
 
     # 1. T+1 锁定：A 股当日买入最早下一交易日才能卖出
     if config.t1_lock and current.trade_date < position.can_sell_date:
-        _record_hold_reason(
-            position, f"T+1锁定，当前 {current.trade_date} 最早可卖出日为 {position.can_sell_date}"
-        )
+        _record_hold_reason(position, f"T+1锁定，当前 {current.trade_date} 最早可卖出日为 {position.can_sell_date}")
         return "HOLD", 0
 
     # 2. 交易约束（涨跌停、停牌等）阻止卖出

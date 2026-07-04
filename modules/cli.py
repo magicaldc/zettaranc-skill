@@ -795,7 +795,10 @@ def build_parser():
     p_sim.add_argument("--signals", type=int, default=2, help="最小共振标签数")
     p_sim.add_argument("--benchmark", type=str, default="000300.SH", help="基准指数代码")
     p_sim.add_argument(
-        "--cost-model", choices=["simple", "advanced"], default="simple", help="成本模型：simple=仅佣金，advanced=含印花税/过户费"
+        "--cost-model",
+        choices=["simple", "advanced"],
+        default="simple",
+        help="成本模型：simple=仅佣金，advanced=含印花税/过户费",
     )
     p_sim.add_argument("--slippage", choices=["fixed", "dynamic"], default="fixed", help="滑点模型")
     p_sim.add_argument("--atr-sizing", action="store_true", help="启用 ATR 波动率仓位调整")

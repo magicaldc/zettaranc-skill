@@ -141,9 +141,7 @@ def build_position(
     Returns:
         Position or None（若资金不足或止损无效）
     """
-    shares, risk_amount = calculate_position_size(
-        equity, entry_price, stop_loss, cash, config, klines=klines
-    )
+    shares, risk_amount = calculate_position_size(equity, entry_price, stop_loss, cash, config, klines=klines)
     if shares <= 0:
         return None
 

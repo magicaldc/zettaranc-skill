@@ -262,9 +262,7 @@ def test_limit_down_blocks_sell():
         )
     ]
     constraints = TradeConstraints(can_buy=True, can_sell=False, reason="收盘跌停")
-    action, shares = check_exit(
-        pos, klines, SimulationConfig(t1_lock=False), constraints=constraints
-    )
+    action, shares = check_exit(pos, klines, SimulationConfig(t1_lock=False), constraints=constraints)
     assert action == "HOLD"
     assert shares == 0
     assert any("跌停" in note or "交易约束阻止卖出" in note for note in pos.notes)

@@ -87,9 +87,7 @@ def test_calmar_ratio():
         {"date": "20240103", "equity": 99},
     ]
     m = calculate_metrics(equity_curve, [], [])
-    assert m.calmar_ratio == pytest.approx(
-        m.annualized_return / abs(m.max_drawdown), rel=1e-9
-    )
+    assert m.calmar_ratio == pytest.approx(m.annualized_return / abs(m.max_drawdown), rel=1e-9)
 
 
 def test_benchmark_return_alpha_beta():
