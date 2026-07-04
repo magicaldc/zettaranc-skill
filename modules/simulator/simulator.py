@@ -35,6 +35,7 @@ from . import (
 from ..datasource import DataSource, get_datasource
 from ..indicators import DailyData
 from ..screener.data import get_all_stocks, get_recent_klines
+from .execution_constraints import get_trade_constraints, next_trading_date
 from .execution_engine import execute_buy, execute_partial_sell, execute_sell
 from .exit_manager import check_exit
 from .market_context import get_market_context, max_positions_allowed
@@ -53,6 +54,7 @@ class _SimulatorState:
     trades: list[TradeRecord] = field(default_factory=list)
     equity_curve: list[dict[str, Any]] = field(default_factory=list)
     benchmark_curve: list[dict[str, Any]] = field(default_factory=list)
+    rejected_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _available_dates(ts_code: str, days: int, datasource: DataSource) -> list[str]:
@@ -122,6 +124,7 @@ def _entry_take_profit(entry_price: float, stop_loss: float, rr: float) -> float
 
 def _run_single_day(
     date: str,
+    dates: list[str],
     state: _SimulatorState,
     candidates: list[SignalScore],
     klines_map: dict[str, list[DailyData]],
@@ -139,7 +142,20 @@ def _run_single_day(
             continue
 
         sub_klines = _klines_for_date(klines, date)
-        action, sell_shares = check_exit(position, sub_klines, config)
+        if not sub_klines:
+            remaining_positions.append(position)
+            continue
+
+        # 卖出前检查交易约束（跌停、停牌等）
+        prev_kline = sub_klines[-2] if len(sub_klines) >= 2 else None
+        constraints = get_trade_constraints(
+            position.ts_code,
+            sub_klines[-1],
+            prev_kline,
+            name=position.name,
+            allow_st=config.allow_st,
+        )
+        action, sell_shares = check_exit(position, sub_klines, config, constraints)
 
         if action == "HOLD":
             remaining_positions.append(position)
@@ -188,8 +204,29 @@ def _run_single_day(
         if len(sub_klines) < 2:
             continue
 
+        # 买入前检查交易约束（涨停、ST、停牌等）
+        current_kline = sub_klines[-1]
+        prev_kline = sub_klines[-2]
+        constraints = get_trade_constraints(
+            sig.ts_code,
+            current_kline,
+            prev_kline,
+            name=sig.name,
+            allow_st=config.allow_st,
+        )
+        if not constraints.can_buy:
+            state.rejected_entries.append(
+                {
+                    "date": date,
+                    "ts_code": sig.ts_code,
+                    "name": sig.name,
+                    "reason": constraints.reason,
+                }
+            )
+            continue
+
         # 买入价：次日开盘价（当前日就是买入日，用当日 open）
-        entry_price = sub_klines[-1].open
+        entry_price = current_kline.open
         stop_loss = _entry_stop_loss(sub_klines[:-1])
         take_profit = _entry_take_profit(entry_price, stop_loss, config.partial_take_profit_rr)
 
@@ -203,12 +240,15 @@ def _run_single_day(
             cash=state.cash,
             equity=state.equity,
             config=config,
+            klines=sub_klines,
+            can_sell_date=next_trading_date(dates, date),
+            is_st=constraints.is_st,
         )
         if not built:
             continue
         pos: Position = built
 
-        trade = execute_buy(pos, sub_klines[-1], config, sub_klines)
+        trade = execute_buy(pos, current_kline, config, sub_klines)
         state.trades.append(trade)
         state.cash -= trade.shares * trade.price + trade.fee
         state.positions.append(pos)
@@ -282,7 +322,7 @@ def run_simulation(
 
         filtered = filter_signals(candidates, config.position_score_threshold, config.signal_min_count)
 
-        _run_single_day(date, state, filtered, klines_map, context, config)
+        _run_single_day(date, dates, state, filtered, klines_map, context, config)
 
         # 记录资金曲线
         state.equity = _portfolio_value(state, date, klines_map)
@@ -368,11 +408,12 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
         if holding_days:
             result.avg_holding_days = sum(holding_days) / len(holding_days)
 
-    # 基准曲线与专业绩效指标
+    # 基准曲线、被拒买入记录与专业绩效指标
     benchmark_curve = getattr(state, "benchmark_curve", None) or []
     if not isinstance(benchmark_curve, list):
         benchmark_curve = []
     result.benchmark_curve = benchmark_curve
+    result.rejected_entries = getattr(state, "rejected_entries", None) or []
     result.metrics = calculate_metrics(
         result.equity_curve, benchmark_curve, result.trades
     )
@@ -382,18 +423,31 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
 
 def summary_text(result: SimulationResult) -> str:
     """格式化模拟结果为可读文本。"""
+    m = result.metrics
+    annualized = m.annualized_return if m else 0.0
+    calmar = m.calmar_ratio if m else 0.0
+    sortino = m.sortino_ratio if m else 0.0
+    bench_return = m.benchmark_return if m else 0.0
+    win_rate = m.win_rate if m else result.win_rate
+    gain_loss = m.gain_loss_ratio if m else 0.0
+
     lines = [
         f"{'=' * 60}",
-        "少女/少妇模拟器 v0.1 回测结果",
+        "少女/少妇模拟器 v0.2 回测结果",
         f"{'=' * 60}",
         f"初始资金:     {result.initial_capital:,.2f}",
         f"最终市值:     {result.final_value:,.2f}",
         f"总收益:       {result.total_return:+.2%}",
+        f"年化收益:     {annualized:+.2%}",
         f"最大回撤:     {result.max_drawdown:.2%}",
         f"夏普比率:     {result.sharpe_ratio:.2f}",
+        f"索提诺比率:   {sortino:.2f}",
+        f"Calmar比率:   {calmar:.2f}",
+        f"基准收益:     {bench_return:+.2%}",
         f"总交易次数:   {result.total_trades}",
-        f"胜率:         {result.win_rate:.1%}",
+        f"胜率:         {win_rate:.1%}",
         f"盈亏比:       {result.profit_factor:.2f}",
+        f"gain/loss比:   {gain_loss:.2f}",
         f"平均持仓天数: {result.avg_holding_days:.1f}",
         f"未平仓数:     {len(result.positions)}",
         f"{'=' * 60}",

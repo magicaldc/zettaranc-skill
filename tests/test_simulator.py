@@ -19,6 +19,7 @@ from modules.simulator import (
     SlippageModel,
     TradeRecord,
 )
+from modules.simulator.execution_constraints import next_trading_date
 from modules.simulator.execution_engine import execute_buy, execute_sell
 from modules.simulator.exit_manager import check_exit
 from modules.simulator.market_context import MarketContext, get_market_context, max_positions_allowed
@@ -449,7 +450,8 @@ class TestRunSingleDay:
             verdict=SignalVerdict.PASS,
         )
 
-        _run_single_day("20260110", state, [sig], klines_map, ctx, config)
+        dates = ["20260109", "20260110", "20260111"]
+        _run_single_day("20260110", dates, state, [sig], klines_map, ctx, config)
         assert len(state.positions) == 1
         assert state.cash < 1000000
         mock_buy.assert_called_once()
@@ -482,8 +484,9 @@ class TestRunSingleDay:
             ts_code="600519.SH", name="茅台", action="SELL", date="20260105", price=94, shares=1000, pnl=-6000
         )
 
+        dates = ["20260104", "20260105", "20260106"]
         klines = _make_klines(n=10, start_price=100, trend=-0.02)
-        _run_single_day("20260105", state, [], {"600519.SH": klines}, ctx, config)
+        _run_single_day("20260105", dates, state, [], {"600519.SH": klines}, ctx, config)
         assert len(state.positions) == 0
         mock_sell.assert_called_once()
 
@@ -506,3 +509,280 @@ class TestIntegration:
         assert isinstance(result, SimulationResult)
         assert result.total_trades == 0
         assert result.initial_capital == SimulationConfig().initial_capital
+
+
+def test_run_simulation_returns_metrics():
+    """端到端回归：run_simulation 必须返回非空 metrics 对象。"""
+    from modules.simulator.simulator import run_simulation
+    from modules.simulator import SimulationConfig
+
+    klines = _make_klines(n=90, start_price=100, trend=0.005)
+    sim_dates = [k.trade_date for k in klines[-30:]]
+
+    mock_ds = MagicMock()
+    mock_ds.get_kline_dicts.return_value = [
+        {
+            "trade_date": d,
+            "open": 100.0,
+            "high": 102.0,
+            "low": 98.0,
+            "close": 101.0,
+            "vol": 10000.0,
+            "amount": 1010000.0,
+            "pct_chg": 1.0,
+        }
+        for d in sim_dates
+    ]
+    mock_ds.get_index_daily.return_value = MagicMock()
+    mock_ds.get_index_daily.return_value.empty = True
+
+    with patch("modules.simulator.simulator.get_datasource", return_value=mock_ds), \
+         patch("modules.simulator.simulator.get_recent_klines", return_value=klines), \
+         patch("modules.simulator.simulator.get_market_context") as mock_ctx, \
+         patch("modules.simulator.simulator.evaluate_stock") as mock_eval:
+        mock_ctx.return_value = MarketContext(
+            date=sim_dates[0],
+            regime=MarketRegime.NEUTRAL,
+            index_trend=50,
+            breadth=0.0,
+            moneyflow_score=50,
+        )
+        mock_eval.return_value = SignalScore(
+            ts_code="600519.SH",
+            name="茅台",
+            date=sim_dates[0],
+            score=85,
+            b1_score=80,
+            trend_score=80,
+            volume_score=75,
+            risk_score=80,
+            signals=["B1", "沙漏完美"],
+            reasons=["B1"],
+            warnings=[],
+            verdict=SignalVerdict.PASS,
+        )
+
+        result = run_simulation(
+            ts_codes=["600519.SH"], days=30, config=SimulationConfig(), datasource=mock_ds
+        )
+
+    assert result.metrics is not None
+    assert len(result.equity_curve) == 30
+
+
+class TestConstraintsIntegration:
+    def test_rejected_entry_on_limit_up(self):
+        """涨停开盘的候选股应被记录到 rejected_entries，且不会开仓。"""
+        from modules.simulator.simulator import _SimulatorState
+
+        config = SimulationConfig(max_positions=1)
+        klines = _make_klines(n=10, start_price=100, trend=0.01)
+        dates = [k.trade_date for k in klines]
+
+        # 将当日开盘价打到涨停价以上，触发买入约束
+        prev_close = klines[-2].close
+        klines[-1].open = round(prev_close * 1.11, 2)
+
+        state = _SimulatorState(cash=1_000_000, equity=1_000_000)
+        ctx = MarketContext(
+            date=klines[-1].trade_date,
+            regime=MarketRegime.STRONG,
+            index_trend=70,
+            breadth=0.1,
+            moneyflow_score=60,
+        )
+        sig = SignalScore(
+            ts_code="600519.SH",
+            name="茅台",
+            date=klines[-1].trade_date,
+            score=85,
+            b1_score=80,
+            trend_score=80,
+            volume_score=75,
+            risk_score=80,
+            signals=["B1", "沙漏完美"],
+            reasons=["B1"],
+            warnings=[],
+            verdict=SignalVerdict.PASS,
+        )
+
+        _run_single_day(klines[-1].trade_date, dates, state, [sig], {"600519.SH": klines}, ctx, config)
+        assert len(state.positions) == 0
+        assert len(state.rejected_entries) == 1
+        assert "涨停" in state.rejected_entries[0]["reason"]
+
+    def test_t1_lock_prevents_same_day_sell(self):
+        """T+1 制度下，买入当日即使触发止损也不应卖出。"""
+        from modules.simulator.simulator import _SimulatorState
+
+        config = SimulationConfig(t1_lock=True)
+        klines = _make_klines(n=10, start_price=100, trend=-0.05)
+        dates = [k.trade_date for k in klines]
+        entry_date = dates[1]
+        can_sell = next_trading_date(dates, entry_date)
+
+        pos = Position(
+            ts_code="600519.SH",
+            name="茅台",
+            entry_date=entry_date,
+            entry_price=100,
+            shares=1000,
+            stop_loss=99,
+            take_profit=110,
+            risk_amount=5000,
+            can_sell_date=can_sell,
+        )
+        state = _SimulatorState(cash=0, equity=100_000, positions=[pos])
+        ctx = MarketContext(
+            date=entry_date,
+            regime=MarketRegime.STRONG,
+            index_trend=70,
+            breadth=0.1,
+            moneyflow_score=60,
+        )
+
+        _run_single_day(entry_date, dates, state, [], {"600519.SH": klines}, ctx, config)
+        assert len(state.positions) == 1
+        assert any("T+1" in note for note in pos.notes)
+
+    def test_build_result_populates_v02_fields(self):
+        """_build_result 必须填充 metrics、benchmark_curve、rejected_entries，同时保留 v0.1 字段。"""
+        config = SimulationConfig()
+        state = MagicMock()
+        state.equity = config.initial_capital
+        state.trades = []
+        state.equity_curve = [{"date": "20260101", "equity": config.initial_capital}]
+        state.positions = []
+        state.benchmark_curve = [{"date": "20260101", "close": 100}]
+        state.rejected_entries = [{"date": "20260101", "ts_code": "600519.SH", "reason": "涨停"}]
+
+        result = _build_result(state, config)
+        assert result.metrics is not None
+        assert result.benchmark_curve == state.benchmark_curve
+        assert result.rejected_entries == state.rejected_entries
+        # v0.1 字段保持兼容
+        assert result.total_return == 0
+        assert result.max_drawdown == 0
+
+    def test_summary_text_includes_new_metrics(self):
+        """summary_text 应包含年化、Calmar、Sortino、基准收益、胜率、gain/loss 比。"""
+        from modules.simulator.simulator import summary_text
+        from modules.simulator.metrics import PerformanceMetrics
+
+        result = SimulationResult(config=SimulationConfig())
+        result.metrics = PerformanceMetrics(
+            annualized_return=0.12,
+            calmar_ratio=1.5,
+            sortino_ratio=2.0,
+            benchmark_return=0.08,
+            win_rate=0.55,
+            gain_loss_ratio=1.8,
+        )
+        text = summary_text(result)
+        assert "年化收益" in text
+        assert "Calmar" in text
+        assert "索提诺" in text
+        assert "基准收益" in text
+        assert "gain/loss" in text
+        assert "12.00%" in text
+
+    def test_limit_down_prevents_sell(self):
+        """跌停日卖出约束应阻止 check_exit 触发卖出。"""
+        from modules.simulator.simulator import _SimulatorState
+
+        config = SimulationConfig(t1_lock=False)
+        klines = _make_klines(n=10, start_price=100, trend=-0.01)
+        dates = [k.trade_date for k in klines]
+        entry_date = dates[1]
+        can_sell = dates[1]  # 已过 T+1
+
+        # 让当日收盘跌停，触发卖出约束
+        prev_close = klines[-2].close
+        klines[-1].close = round(prev_close * 0.90, 2)
+
+        pos = Position(
+            ts_code="600519.SH",
+            name="茅台",
+            entry_date=entry_date,
+            entry_price=100,
+            shares=1000,
+            stop_loss=1,  # 极低止损，确保会被触发
+            take_profit=110,
+            risk_amount=5000,
+            can_sell_date=can_sell,
+        )
+        state = _SimulatorState(cash=0, equity=100_000, positions=[pos])
+        ctx = MarketContext(
+            date=klines[-1].trade_date,
+            regime=MarketRegime.STRONG,
+            index_trend=70,
+            breadth=0.1,
+            moneyflow_score=60,
+        )
+
+        _run_single_day(klines[-1].trade_date, dates, state, [], {"600519.SH": klines}, ctx, config)
+        assert len(state.positions) == 1
+        assert any("跌停" in note for note in pos.notes)
+
+
+class TestAtrSizingIntegration:
+    def test_build_position_receives_klines_and_can_sell_date(self):
+        """build_position 必须接收到 klines、can_sell_date、is_st 参数。"""
+        from modules.simulator.simulator import _SimulatorState
+
+        config = SimulationConfig(use_atr_sizing=True, max_positions=1)
+        klines = _make_klines(n=70, start_price=100, trend=0.005)
+        dates = [k.trade_date for k in klines]
+
+        state = _SimulatorState(cash=1_000_000, equity=1_000_000)
+        ctx = MarketContext(
+            date=klines[-1].trade_date,
+            regime=MarketRegime.STRONG,
+            index_trend=70,
+            breadth=0.1,
+            moneyflow_score=60,
+        )
+        sig = SignalScore(
+            ts_code="600519.SH",
+            name="茅台",
+            date=klines[-1].trade_date,
+            score=85,
+            b1_score=80,
+            trend_score=80,
+            volume_score=75,
+            risk_score=80,
+            signals=["B1", "沙漏完美"],
+            reasons=["B1"],
+            warnings=[],
+            verdict=SignalVerdict.PASS,
+        )
+
+        with patch("modules.simulator.simulator.build_position") as mock_build:
+            mock_pos = Position(
+                ts_code="600519.SH",
+                name="茅台",
+                entry_date=sig.date,
+                entry_price=klines[-1].open,
+                shares=1000,
+                stop_loss=95,
+                take_profit=110,
+                risk_amount=5000,
+            )
+            mock_build.return_value = mock_pos
+            with patch("modules.simulator.simulator.execute_buy") as mock_buy:
+                mock_buy.return_value = TradeRecord(
+                    ts_code="600519.SH",
+                    name="茅台",
+                    action="BUY",
+                    date=sig.date,
+                    price=klines[-1].open,
+                    shares=1000,
+                )
+                _run_single_day(sig.date, dates, state, [sig], {"600519.SH": klines}, ctx, config)
+
+        assert mock_build.called
+        _, kwargs = mock_build.call_args
+        assert kwargs.get("klines") is not None
+        assert len(kwargs.get("klines")) == len(klines)
+        assert kwargs.get("can_sell_date") == next_trading_date(dates, sig.date)
+        assert kwargs.get("is_st") is False
