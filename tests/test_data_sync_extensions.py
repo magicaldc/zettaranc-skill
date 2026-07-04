@@ -52,7 +52,7 @@ def test_data_syncer_init_requires_token_in_jnb_mode():
     """JNB 模式下 DataSyncer __init__ 源码层面必须检查 TUSHARE_TOKEN / API URL（静态检查）"""
     # 静态检查避免 conftest autouse fixture 与 monkeypatch 互踩
     import inspect
-    from modules.data_sync import DataSyncer
+    from modules.data_sync.syncer import DataSyncer
 
     src = inspect.getsource(DataSyncer.__init__)
     assert "DATA_MODE" in src
