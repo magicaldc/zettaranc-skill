@@ -267,7 +267,13 @@ class CompositeDataSource:
         self._preferred = preferred
         self._bridge = BridgeDataSource()
         self._sqlite = SqliteDataSource()
-        self._tushare = TushareDataSource()
+        self._tushare: TushareDataSource | None = None
+
+    @property
+    def _tushare_source(self) -> TushareDataSource:
+        if self._tushare is None:
+            self._tushare = TushareDataSource()
+        return self._tushare
 
     @property
     def name(self) -> str:
@@ -279,47 +285,47 @@ class CompositeDataSource:
         if self._preferred == "sqlite":
             return self._sqlite.health_check()
         if self._preferred == "tushare":
-            return self._tushare.health_check()
+            return self._tushare_source.health_check()
         return self._bridge.health_check() or self._sqlite.health_check()
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_daily(ts_code, start_date, end_date)
+            return self._tushare_source.get_daily(ts_code, start_date, end_date)
         return None
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_index_daily(ts_code, start_date, end_date)
+            return self._tushare_source.get_index_daily(ts_code, start_date, end_date)
         return None
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_realtime_quote(ts_codes)
+            return self._tushare_source.get_realtime_quote(ts_codes)
         return None
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_moneyflow(ts_code, trade_date)
+            return self._tushare_source.get_moneyflow(ts_code, trade_date)
         return None
 
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_daily_basic(ts_code, start_date, end_date)
+            return self._tushare_source.get_daily_basic(ts_code, start_date, end_date)
         return None
 
     def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_stk_factor(ts_code, start_date, end_date)
+            return self._tushare_source.get_stk_factor(ts_code, start_date, end_date)
         return None
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_stock_basic(ts_code, name)
+            return self._tushare_source.get_stock_basic(ts_code, name)
         return None
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         if self._preferred == "tushare":
-            return self._tushare.get_trade_cal(exchange, start_date, end_date)
+            return self._tushare_source.get_trade_cal(exchange, start_date, end_date)
         return None
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
@@ -331,7 +337,7 @@ class CompositeDataSource:
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
         elif self._preferred == "tushare":
-            sources = [self._tushare]
+            sources = [self._tushare_source]
 
         for source in sources:
             try:
@@ -357,7 +363,7 @@ class CompositeDataSource:
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
         elif self._preferred == "tushare":
-            sources = [self._tushare]
+            sources = [self._tushare_source]
 
         for source in sources:
             try:
