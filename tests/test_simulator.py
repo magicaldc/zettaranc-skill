@@ -93,6 +93,24 @@ def test_simulation_config_default_fields():
     assert cfg.slippage_model.base_slippage == 0.001
 
 
+def test_raw_strategy_signal_dataclass():
+    from modules.simulator import RawStrategySignal
+
+    s = RawStrategySignal(strategy="B1", category="rebound", action="BUY", confidence=0.8, trade_date="20240101")
+    assert s.strategy == "B1"
+    assert s.confidence == 0.8
+
+
+def test_simulation_config_strategy_mode_defaults():
+    from modules.simulator import SimulationConfig
+
+    cfg = SimulationConfig()
+    assert cfg.strategy_mode == "simple"
+    assert cfg.strategy_lookback_days == 5
+    assert cfg.min_resonance_score == 0.35
+    assert cfg.strategy_category_weights == {}
+
+
 class TestPositionSizer:
     def test_basic_size(self):
         shares, risk = calculate_position_size(

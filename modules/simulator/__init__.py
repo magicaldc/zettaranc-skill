@@ -64,6 +64,33 @@ class MarketContext:
 
 
 @dataclass
+class RawStrategySignal:
+    """标准化后的战法信号"""
+
+    strategy: str
+    category: str
+    action: str
+    confidence: float
+    trade_date: str
+    reason: str = ""
+
+
+@dataclass
+class ResonanceScore:
+    """战法共振评分结果"""
+
+    ts_code: str
+    name: str
+    date: str
+    total_score: float
+    buy_score: float
+    risk_score: float
+    matched_strategies: list[str]
+    conflicts: list[str]
+    verdict: SignalVerdict
+
+
+@dataclass
 class SignalScore:
     """单只股票在某日的综合信号评分"""
 
@@ -79,6 +106,7 @@ class SignalScore:
     reasons: list[str]
     warnings: list[str]
     verdict: SignalVerdict = SignalVerdict.NO_SIGNAL
+    resonance: ResonanceScore | None = None
 
 
 @dataclass
@@ -150,6 +178,11 @@ class SimulationConfig:
     benchmark_code: str = "000300.SH"
     apply_price_limit: bool = True
     apply_halt_filter: bool = True
+    # v0.3 新增：战法共振配置
+    strategy_mode: str = "simple"
+    strategy_lookback_days: int = 5
+    min_resonance_score: float = 0.35
+    strategy_category_weights: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -173,6 +206,8 @@ class SimulationResult:
     metrics: Any | None = None
     benchmark_curve: list[dict[str, Any]] = field(default_factory=list)
     rejected_entries: list[dict[str, Any]] = field(default_factory=list)
+    # v0.3 新增：战法共振统计摘要
+    resonance_summary: dict[str, Any] = field(default_factory=dict)
 
 
 __all__ = [
@@ -181,6 +216,8 @@ __all__ = [
     "CostModel",
     "SlippageModel",
     "MarketContext",
+    "RawStrategySignal",
+    "ResonanceScore",
     "SignalScore",
     "Position",
     "TradeRecord",
