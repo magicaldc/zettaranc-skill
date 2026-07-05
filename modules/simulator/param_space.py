@@ -31,7 +31,7 @@ class ParamDimension:
         if self.low is None or self.high is None or self.step is None:
             raise ValueError(f"维度 {self.name} 缺少 low/high/step")
 
-        values = []
+        values: list[Any] = []
         current = self.low
         while current <= self.high + 1e-9:  # 浮点精度容差
             if self.param_type == "int":

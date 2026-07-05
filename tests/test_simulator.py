@@ -956,12 +956,12 @@ def test_simulation_config_walk_forward_fields():
     """测试 SimulationConfig 的 walk-forward 字段"""
     from modules.simulator import SimulationConfig
     from modules.simulator.walk_forward import WalkForwardConfig
-    
+
     # 默认值
     config = SimulationConfig()
     assert config.walk_forward is False
     assert config.wf_config is None
-    
+
     # 设置 walk-forward 配置
     wf_config = WalkForwardConfig(train_days=120, test_days=60)
     config = SimulationConfig(walk_forward=True, wf_config=wf_config)
