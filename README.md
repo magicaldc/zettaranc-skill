@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.ai/code)
-[![v3.5.0](https://img.shields.io/badge/version-3.5.0-green)](docs/CHANGELOG.md)
+[![v3.6.0](https://img.shields.io/badge/version-3.6.0-green)](docs/CHANGELOG.md)
 
 
 <br>
@@ -298,6 +298,9 @@ zt simulate 000001.SZ --days 250 --atr-sizing --max-position-pct 0.15 --json
 
 # 战法共振模式（多战法同屏评分 + 冲突降级）
 zt simulate 000001.SZ --days 250 --strategy-mode resonance --strategy-lookback 5 --json
+
+# Walk-forward 参数寻优
+zt simulate 000001.SZ --days 500 --walk-forward --wf-train-days 120 --wf-test-days 60 --wf-objective calmar --json
 ```
 
 ### 交易记录

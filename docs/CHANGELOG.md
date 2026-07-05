@@ -2,6 +2,17 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v3.6.0 (2026-07-04)
+
+### 少女/少妇模拟器 v0.4 —— Walk-forward 参数寻优
+
+- 新增 `modules/simulator/param_space.py`：参数空间定义与网格生成。
+- 新增 `modules/simulator/walk_forward.py`：滚动窗口切分、参数搜索、OOS 拼接。
+- 新增 `modules/simulator/optimizer_report.py`：walk-forward 报告输出（文本/JSON）。
+- 扩展 `run_simulation` 支持显式日期范围（`start_date`/`end_date`）。
+- 扩展 `SimulationConfig` 支持 `walk_forward` 模式和 `wf_config` 配置。
+- CLI `zt simulate` 新增 `--walk-forward/--wf-train-days/--wf-test-days/--wf-objective` 参数。
+
 ## v3.5.0 (2026-07-04)
 
 ### 少女/少妇模拟器 v0.3 —— 战法共振评分
