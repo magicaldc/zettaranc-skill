@@ -593,7 +593,8 @@ def backtest_shaofu_portfolio_integrated(
         positions_value = 0.0
         for code, st in stock_states.items():
             if st["current_trade"] is not None:
-                positions_value += st["current_trade"].shares_equiv * st["klines"][day_idx].close
+                shares = getattr(st["current_trade"], "shares_equiv", 0)
+                positions_value += shares * st["klines"][day_idx].close
         current_equity = pm.cash + positions_value
 
         # ── 6c. 逐股状态转移（warmup → active） ──────────
@@ -778,6 +779,7 @@ def backtest_shaofu_portfolio_integrated(
             exit_price=td.get("exit_price", 0),
             entry_reason=td.get("entry_reason", ""),
             exit_reason=td.get("exit_reason", ""),
+            stop_loss_price=td.get("stop_loss_price", td["entry_price"] * 0.97),
             pnl_pct=td.get("pnl_pct", 0),
             holding_days=td.get("holding_days", 0),
             market_regime=td.get("market_regime", ""),
